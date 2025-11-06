@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "autonomous-car-2d"
+version = "0.1.0"
+description = ""
+authors = ["nctrinh <nctrinh2705@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+numpy = "2.1.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
