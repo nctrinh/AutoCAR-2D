@@ -1,0 +1,49 @@
+{
+  "width": 100,
+  "height": 100,
+  "start": [
+    10,
+    10
+  ],
+  "goal": [
+    90,
+    90
+  ],
+  "obstacles": [
+    {
+      "type": "rectangle",
+      "x": 30,
+      "y": 30,
+      "width": 20,
+      "height": 10,
+      "angle": 0.0
+    },
+    {
+      "type": "circle",
+      "x": 70,
+      "y": 70,
+      "radius": 8
+    },
+    {
+      "type": "polygon",
+      "vertices": [
+        [
+          50,
+          10
+        ],
+        [
+          60,
+          20
+        ],
+        [
+          55,
+          30
+        ],
+        [
+          45,
+          25
+        ]
+      ]
+    }
+  ]
+}
