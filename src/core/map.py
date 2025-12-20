@@ -125,9 +125,8 @@ class PolygonObstacle(Obstacle):
             if y > min(p1y, p2y):
                 if y < max(p1y, p2y):
                     if x < max(p1x, p2x):
-                        if p1y != p2y:
-                            x_inner = p1x + (y - p1y) * (p2x - p1x) / (p2y - p1y)
-                        if p1x == p2x or x <= x_inner:
+                        x_inner = p1x + (y - p1y) * (p2x - p1x) / (p2y - p1y)
+                        if x <= x_inner:
                             inside = not inside
             p1x, p1y = p2x, p2y
         return inside
