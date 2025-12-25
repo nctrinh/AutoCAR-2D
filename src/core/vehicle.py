@@ -46,7 +46,7 @@ class Vehicle:
     def reset(self, x: float = 0.0, y: float = 0.0, theta: float = 0.0):
         self.state = VehicleState(x=x, y=y, theta=theta)
 
-    def update(self, acceleration: float, steering_angle: float, dt: Optional[float] = None):
+    def update(self, acceleration: float, steering_angle: float):
         """
         Update vehicle state using bicycle model.
         
@@ -59,9 +59,7 @@ class Vehicle:
         Args:
             acceleration: Desired acceleration (m/s^2)
             steering_angle: Desired steering angle (radians)
-            dt: Time step (uses self.dt if None)
         """
-        dt = dt or self.dt
 
         acceleration = np.clip(
             acceleration, 
@@ -74,17 +72,17 @@ class Vehicle:
             self.config.max_steering_angle
         )
 
-        new_velocity = self.state.velocity + acceleration * dt
+        new_velocity = self.state.velocity + acceleration * self.dt
         new_velocity = np.clip(new_velocity, 0, self.config.max_velocity)
 
         if abs(new_velocity) >= 1e-3:
             theta_dot = (new_velocity / self.config.wheelbase) * np.tan(steering_angle)
 
-            new_theta = self.state.theta + theta_dot * dt
+            new_theta = self.state.theta + theta_dot * self.dt
             new_theta = np.arctan2(np.sin(new_theta), np.cos(new_theta)) # [-pi, pi]
 
-            new_x = self.state.x + new_velocity * np.cos(self.state.theta) * dt
-            new_y = self.state.y + new_velocity * np.sin(self.state.theta) * dt
+            new_x = self.state.x + new_velocity * np.cos(self.state.theta) * self.dt
+            new_y = self.state.y + new_velocity * np.sin(self.state.theta) * self.dt
         else:
             new_x, new_y, new_theta = self.state.x, self.state.y, self.state.theta
 
