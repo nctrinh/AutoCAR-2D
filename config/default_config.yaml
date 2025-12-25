@@ -14,7 +14,7 @@ vehicle:
   max_steering_angle: 0.6 # ~34 degrees
 
 planner:
-  algorithm: rrt_star
+  algorithm: rrt
 
   astar:
     max_iterations: 10000
@@ -97,84 +97,63 @@ visualization:
 map:
   width: 100
   height: 100
-  safety_margin: 5.0
-  start: [0.0, 0.0]
-  goal: [75.0, 55.0]
+  safety_margin: 4.0   # Tăng margin lên một chút cho dễ thở
+  start: [10.0, 10.0]
+  goal: [90.0, 90.0]
 
   obstacles:
     # =====================
-    # Cụm circle obstacles (nhiễu, vật cản nhỏ)
+    # THE GATES (Hai bức tường so le)
     # =====================
-    - type: "circle"
+    
+    # Tường 1: Chặn bên trái, buộc robot đi sang phải
+    - type: "rectangle"
       x: 30
-      y: 30
-      radius: 1
-
-    - type: "circle"
-      x: 40
-      y: 60
-      radius: 3
-
-    - type: "circle"
-      x: 38
-      y: 25
-      radius: 2
-
-    - type: "circle"
-      x: 20
-      y: 45
-      radius: 2
-
-    - type: "circle"
-      x: 25
-      y: 50
-      radius: 1.5
-
-    - type: "circle"
-      x: 35
-      y: 55
-      radius: 1.5
-
-    - type: "circle"
-      x: 50
-      y: 20
-      radius: 2.5
-
-    # =====================
-    # Rectangle obstacles (tạo hành lang, tường)
-    # =====================
-    - type: "rectangle"
-      x: 60
-      y: 50
-      width: 10
-      height: 10
-      angle: 0.5
-
-    - type: "rectangle"
-      x: 45
-      y: 70
-      width: 20
-      height: 3
+      y: 35
+      width: 60
+      height: 4
       angle: 0.0
 
-    - type: "rectangle"
-      x: 45
-      y: 75
-      width: 20
-      height: 3
-      angle: 0.0
-
+    # Tường 2: Chặn bên phải, buộc robot đi sang trái
     - type: "rectangle"
       x: 70
-      y: 40
-      width: 3
-      height: 20
+      y: 65
+      width: 60
+      height: 4
       angle: 0.0
 
-    - type: "rectangle"
+    # =====================
+    # PILLARS (Các trụ tròn để bo cua)
+    # =====================
+    # Những trụ này đặt ở vị trí chiến lược để robot không thể
+    # cắt góc quá gắt (short-cut) mà phải lượn vòng.
+
+    # Trụ ở khu vực xuất phát
+    - type: "circle"
+      x: 40
+      y: 15
+      radius: 3
+
+    # Trụ ở khe hở đầu tiên (bên phải)
+    - type: "circle"
+      x: 80
+      y: 35
+      radius: 2
+
+    # Trụ ở khu vực giữa map
+    - type: "circle"
+      x: 50
+      y: 50
+      radius: 4
+
+    # Trụ ở khe hở thứ hai (bên trái)
+    - type: "circle"
+      x: 20
+      y: 65
+      radius: 2
+
+    # Trụ bảo vệ vùng Goal
+    - type: "circle"
       x: 75
-      y: 40
-      width: 3
-      height: 20
-      angle: 0.0
-
+      y: 85
+      radius: 3
