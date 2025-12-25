@@ -194,6 +194,7 @@ class Map2D:
         
         Args:
             x, y: Point coordinates
+            safety_margin: None for Planner. Not None for Controller
             
         Returns:
             True if collision detected
@@ -331,25 +332,3 @@ class Map2D:
     def __repr__(self) -> str:
         return (f"Map2D({self.width}x{self.height}, "
                 f"{len(self.obstacles)} obstacles)")
-    
-
-if __name__ == "__main__":
-    map_env = Map2D(width=100, height=100)
-    
-    map_env.add_obstacle(RectangleObstacle(x=30, y=30, width=20, height=10))
-    map_env.add_obstacle(CircleObstacle(x=70, y=70, radius=8))
-    map_env.add_obstacle(PolygonObstacle(vertices=np.array([
-        [50, 10], [60, 20], [55, 30], [45, 25]
-    ])))
-    
-    map_env.set_start(10, 10)
-    map_env.set_goal(90, 90)
-    
-    print("Collision at (30, 30):", map_env.is_collision(30, 30))
-    print("Collision at (50, 50):", map_env.is_collision(50, 50))
-    
-    map_env.save_to_json("./maps/test_map.json")
-    print("Map saved!")
-    
-    loaded_map = Map2D.load_from_json("test_map.json")
-    print("Loaded:", loaded_map)

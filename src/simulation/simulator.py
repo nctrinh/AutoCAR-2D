@@ -149,6 +149,7 @@ class Simulator:
     def _load_vehicle(self) -> Vehicle:
         """Set vehicle."""
         vehicle = Vehicle(self.vehicle_params)
+        vehicle.reset(self.map_env.start[0], self.map_env.start[1])
         self.last_position = vehicle.get_position()
         print(f"Vehicle set: {vehicle}")
         return vehicle
@@ -417,11 +418,6 @@ class Simulator:
         
         print("\n" + "="*70)
         print("STARTING SIMULATION")
-        print("="*70)
-        print("Controls:")
-        print("  SPACE - Pause/Resume")
-        print("  R - Reset")
-        print("  ESC - Quit")
         print("="*70 + "\n")
         
         clock = pygame.time.Clock()
@@ -503,7 +499,7 @@ class Simulator:
             
             # Draw lookahead point if using Pure Pursuit
             if isinstance(self.controller, PurePursuitController):
-                lookahead = self.controller.get_lookahead_point(self.vehicle)
+                lookahead = self.controller.get_lookahead_point()
                 if lookahead:
                     self.renderer.draw_point(
                         lookahead[0], lookahead[1],
@@ -537,10 +533,12 @@ class Simulator:
         print(f"Simulation time: {self.simulation_time:.2f}s")
         print(f"Total distance: {self.total_distance:.2f}m")
         
-        if self.path:
+        if self.path and self.goal_reached:
             print(f"Path length: {self.path.length:.2f}m")
             efficiency = (self.path.length / self.total_distance * 100) if self.total_distance > 0 else 0
             print(f"Path efficiency: {efficiency:.1f}%")
+        else:
+            print("Path efficiency: 0.0%")
         
         print(f"Goal reached: {self.goal_reached}")
         print(f"Collision: {self.collision_detected}")
@@ -553,13 +551,3 @@ class Simulator:
             print(f"Controller: {self.controller.__class__.__name__}")
         
         print("="*70)
-
-
-# Example usage
-if __name__ == "__main__":
-    
-    sim = Simulator()
-    
-    sim.plan_path()
-    
-    sim.run(max_steps=2000, target_fps=60)

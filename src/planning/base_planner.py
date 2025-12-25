@@ -177,26 +177,3 @@ class BasePlanner(ABC):
     
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(map={self.map_env})"
-    
-
-if __name__ == '__main__':
-    from src.core.map import Map2D, CircleObstacle
-
-    map_env = Map2D(width=100, height=100)
-    map_env.add_obstacle(CircleObstacle(x=50, y=50, radius=10))
-
-    class DummyPlanner(BasePlanner):
-        def plan(self, start, goal, **kwargs):
-            # Just return straight line
-            points = [
-                PathPoint(start[0], start[1]),
-                PathPoint(goal[0], goal[1])
-            ]
-            return Path(points)
-    
-    planner = DummyPlanner(map_env)
-    print(planner)
-    
-    # Test path
-    path = planner.plan((10, 10), (90, 90))
-    print(path)

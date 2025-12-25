@@ -162,24 +162,4 @@ class Vehicle:
         return (f"Vehicle(pos=({self.state.x:.2f}, {self.state.y:.2f}), "
                 f"theta={np.degrees(self.state.theta):.1f}°, "
                 f"v={self.state.velocity:.2f}m/s)")
-    
-if __name__ == '__main__':
-
-    config = VehicleConfig(
-        length=4.0,
-        width=2.0,
-        max_velocity=15.0
-    )
-
-    vehicle = Vehicle(config)
-
-    vehicle.reset()
-
-    print("Initial: ", vehicle)
-
-    for _ in range(10):
-        vehicle.update(acceleration=2.0, steering_angle=0.1)
-
-    print("After 10 steps:", vehicle)
-    print("Corners:", vehicle.get_corners())
 
