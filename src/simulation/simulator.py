@@ -1,5 +1,4 @@
 import pygame
-import time
 import numpy as np
 from typing import Optional, Tuple
 from enum import Enum
@@ -13,7 +12,6 @@ from src.core.map import (
     CircleObstacle,
     RectangleObstacle,
     PolygonObstacle,
-    ObstacleType,
 )
 from src.planning.base_planner import BasePlanner, Path as PlannedPath
 from src.control.pid_controller import PathFollowingPID, PIDController
@@ -62,9 +60,9 @@ class Simulator:
         
         # Initialize components
         self.map_env: Optional[Map2D] = self._load_map()
-        self.vehicle: Optional[Vehicle] = self._set_vehicle()
-        self.planner: Optional[BasePlanner] = self._set_planner()
-        self.controller = self._set_controller()
+        self.vehicle: Optional[Vehicle] = self._load_vehicle()
+        self.planner: Optional[BasePlanner] = self._load_planner()
+        self.controller = self._load_controller()
         self.path: Optional[PlannedPath] = None
         
         # Simulation state
@@ -91,8 +89,9 @@ class Simulator:
         """Load map environment from config."""
         world_width = self.map_params.get("width", 100)
         world_height = self.map_params.get("height", 100)
+        safety_margin = self.map_params.get("safety_margin", 1.0)
 
-        map_env = Map2D(world_width, world_height)
+        map_env = Map2D(world_width, world_height, safety_margin)
 
         start = self.map_params.get("start", None)
         goal = self.map_params.get("goal", None)
@@ -141,27 +140,23 @@ class Simulator:
         print(
             f"Map loaded: size=({map_env.width}, {map_env.height}), "
             f"obstacles={len(map_env.obstacles)}, "
-            f"start={map_env.start}, goal={map_env.goal}"
+            f"start={map_env.start}, goal={map_env.goal}, "
+            f"safety margin={map_env.safety_margin}"
         )
 
         return map_env
     
-    def _set_vehicle(self) -> Vehicle:
+    def _load_vehicle(self) -> Vehicle:
         """Set vehicle."""
         vehicle = Vehicle(self.vehicle_params)
         self.last_position = vehicle.get_position()
         print(f"Vehicle set: {vehicle}")
         return vehicle
     
-    def _set_planner(self) -> BasePlanner:
+    def _load_planner(self) -> BasePlanner:
         """Set path planner based on planner config."""
         planner_cfg = self.planner_params
         planner_name = planner_cfg.get("algorithm", "astar")
-
-        # Common parameters (shared)
-        common_cfg = planner_cfg.get("common", {})
-        max_iterations = common_cfg.get("max_iterations", 10000)
-        safety_margin = common_cfg.get("safety_margin", 1.0)
 
         if planner_name == "astar":
             from src.planning.a_star import AStarPlanner
@@ -172,8 +167,7 @@ class Simulator:
                 map_env=self.map_env,
                 grid_resolution=astar_cfg.get("grid_resolution", 0.5),
                 heuristic_weight=astar_cfg.get("heuristic_weight", 1.0),
-                max_iterations=max_iterations,
-                safety_margin=safety_margin,
+                max_iterations=astar_cfg.get("max_iterations", 10000)
             )
 
         elif planner_name == "rrt":
@@ -183,11 +177,10 @@ class Simulator:
 
             planner = RRTPlanner(
                 map_env=self.map_env,
-                max_iterations=max_iterations,
+                max_iterations=rrt_cfg.get("max_iterations", 10000),
                 step_size=rrt_cfg.get("step_size", 0.5),
                 goal_sample_rate=rrt_cfg.get("goal_sample_rate", 0.1),
-                goal_threshold=rrt_cfg.get("goal_threshold", 2.0),
-                safety_margin=safety_margin,
+                goal_threshold=rrt_cfg.get("goal_threshold", 2.0)
             )
 
         elif planner_name == "rrt_star":
@@ -197,11 +190,10 @@ class Simulator:
 
             planner = RRTStarPlanner(
                 map_env=self.map_env,
-                max_iterations=max_iterations,
+                max_iterations=rrt_star_cfg.get("max_iterations", 10000),
                 step_size=rrt_star_cfg.get("step_size", 0.5),
                 goal_sample_rate=rrt_star_cfg.get("goal_sample_rate", 0.1),
                 goal_threshold=rrt_star_cfg.get("goal_threshold", 2.0),
-                safety_margin=safety_margin,
                 rewire_radius=rrt_star_cfg.get("rewire_radius", 5.0),
             )
 
@@ -211,7 +203,7 @@ class Simulator:
         print(f"[Planner] Using {planner_name}: {planner}")
         return planner
     
-    def _set_controller(self):
+    def _load_controller(self):
         """Set controller (PID / Pure Pursuit / Adaptive Pure Pursuit)."""
 
         ctrl_cfg = self.config.get("controller", {})
@@ -382,8 +374,7 @@ class Simulator:
         self.renderer.add_trajectory_point(*current_pos)
         
         # Check collision
-        if self.map_env.is_collision(current_pos[0], current_pos[1], 
-                                     safety_margin=0.5):
+        if self.map_env.is_collision(current_pos[0], current_pos[1], 0):
             self.collision_detected = True
             self.state = SimulationState.FAILED
             print(f"\nCollision detected at step {self.step}!")
