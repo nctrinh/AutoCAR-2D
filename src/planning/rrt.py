@@ -41,14 +41,12 @@ class RRTPlanner(BasePlanner):
 
     def __init__(self, map_env: Map2D, max_iterations: int = 1000, 
                 step_size: float = 2.0, goal_sample_rate: float = 0.1,
-                goal_threshold: float = 2.0, safety_margin: float = 0.5,
-                rewire_radius: float = 5.0):
+                goal_threshold: float = 2.0, rewire_radius: float = 5.0):
         super().__init__(map_env)
         self.max_iterations = max_iterations
         self.step_size = step_size
         self.goal_sample_rate = goal_sample_rate
         self.goal_threshold = goal_threshold
-        self.safety_margin = safety_margin
         self.rewire_radius = rewire_radius
         self.nodes : List[RRTNode] = []
 
@@ -63,7 +61,6 @@ class RRTPlanner(BasePlanner):
             step_size: Maximum distance to extend tree
             goal_sample_rate: Probability of sampling goal directly
             goal_threshold: Distance to goal considered as reached
-            safety_margin: Safety distance from obstacles
             
         Returns:
             Path object if successful, None otherwise
@@ -72,11 +69,11 @@ class RRTPlanner(BasePlanner):
         start_time = time.time()
         
         # Check validity
-        if not self.is_valid_position(start[0], start[1], self.safety_margin):
+        if not self.is_valid_position(start[0], start[1]):
             print("RRT: Start position is invalid!")
             return None
         
-        if not self.is_valid_position(goal[0], goal[1], self.safety_margin):
+        if not self.is_valid_position(goal[0], goal[1]):
             print("RRT: Goal position is invalid!")
             return None
         
@@ -108,7 +105,7 @@ class RRTPlanner(BasePlanner):
             new_node = self._steer(nearest_node, random_point, self.step_size)
             
             # Check if path to new node is collision-free
-            if self._is_path_collision_free(nearest_node, new_node, self.safety_margin):
+            if self._is_path_collision_free(nearest_node, new_node):
                 new_node.parent = nearest_node
                 new_node.cost = nearest_node.cost + nearest_node.distance_to(new_node)
                 self.nodes.append(new_node)
@@ -117,7 +114,7 @@ class RRTPlanner(BasePlanner):
                 if new_node.distance_to(RRTNode(goal[0], goal[1])) <= self.goal_threshold:
                     # Try to connect directly to goal
                     goal_node = RRTNode(goal[0], goal[1])
-                    if self._is_path_collision_free(new_node, goal_node, self.safety_margin):
+                    if self._is_path_collision_free(new_node, goal_node):
                         goal_node.parent = new_node
                         goal_node.cost = new_node.cost + new_node.distance_to(goal_node)
                         self.nodes.append(goal_node)
@@ -173,8 +170,7 @@ class RRTPlanner(BasePlanner):
         
         return RRTNode(new_x, new_y)
     
-    def _is_path_collision_free(self, node1: RRTNode, node2: RRTNode,
-                                safety_margin: float = 0.5) -> bool:
+    def _is_path_collision_free(self, node1: RRTNode, node2: RRTNode) -> bool:
         """Check if straight line between two nodes is collision-free."""
         num_samples = int(np.ceil(node1.distance_to(node2) / 0.5))
         num_samples = max(num_samples, 5)  # At least 5 samples
@@ -184,7 +180,7 @@ class RRTPlanner(BasePlanner):
             x = node1.x + t * (node2.x - node1.x)
             y = node1.y + t * (node2.y - node1.y)
             
-            if not self.is_valid_position(x, y, safety_margin):
+            if not self.is_valid_position(x, y):
                 return False
         
         return True
@@ -220,11 +216,11 @@ class RRTStarPlanner(RRTPlanner):
         """
         start_time = time.time()
         
-        if not self.is_valid_position(start[0], start[1], self.safety_margin):
+        if not self.is_valid_position(start[0], start[1]):
             print("RRT*: Start position is invalid!")
             return None
         
-        if not self.is_valid_position(goal[0], goal[1], self.safety_margin):
+        if not self.is_valid_position(goal[0], goal[1]):
             print("RRT*: Goal position is invalid!")
             return None
         
@@ -248,7 +244,7 @@ class RRTStarPlanner(RRTPlanner):
             new_node = self._steer(nearest_node, random_point, self.step_size)
             
             # Check collision
-            if not self._is_path_collision_free(nearest_node, new_node, self.safety_margin):
+            if not self._is_path_collision_free(nearest_node, new_node):
                 continue
             
             # Find neighbors for rewiring
@@ -260,7 +256,7 @@ class RRTStarPlanner(RRTPlanner):
             
             for neighbor in neighbors:
                 cost = neighbor.cost + neighbor.distance_to(new_node)
-                if cost < min_cost and self._is_path_collision_free(neighbor, new_node, self.safety_margin):
+                if cost < min_cost and self._is_path_collision_free(neighbor, new_node):
                     best_parent = neighbor
                     min_cost = cost
             
@@ -272,14 +268,14 @@ class RRTStarPlanner(RRTPlanner):
             # Rewire tree
             for neighbor in neighbors:
                 new_cost = new_node.cost + new_node.distance_to(neighbor)
-                if new_cost < neighbor.cost and self._is_path_collision_free(new_node, neighbor, self.safety_margin):
+                if new_cost < neighbor.cost and self._is_path_collision_free(new_node, neighbor):
                     neighbor.parent = new_node
                     neighbor.cost = new_cost
             
             # Check goal
             if new_node.distance_to(RRTNode(goal[0], goal[1])) <= self.goal_threshold:
                 goal_node_temp = RRTNode(goal[0], goal[1])
-                if self._is_path_collision_free(new_node, goal_node_temp, self.safety_margin):
+                if self._is_path_collision_free(new_node, goal_node_temp):
                     if goal_node is None:
                         goal_node = goal_node_temp
                         goal_node.parent = new_node

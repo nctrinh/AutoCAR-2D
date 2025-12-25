@@ -25,11 +25,11 @@ class Obstacle:
 
 @dataclass
 class RectangleObstacle(Obstacle):
-    x: float # center x
-    y: float # center y
+    x: float
+    y: float
     width: float
     height: float
-    angle: float = 0.0 # rotation angle in radians
+    angle: float = 0.0
 
     def __post_init__(self):
         self.type = ObstacleType.RECTANGLE
@@ -75,8 +75,9 @@ class RectangleObstacle(Obstacle):
         ])
 
         if self.angle != 0:
-            cos_a = np.cos(-self.angle)
-            sin_a = np.sin(-self.angle)
+            # BUG FIX: Sử dụng +self.angle để transform từ Local ra World
+            cos_a = np.cos(self.angle) 
+            sin_a = np.sin(self.angle)
             rotation = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
             corners = corners @ rotation.T
         
@@ -108,7 +109,7 @@ class CircleObstacle(Obstacle):
 
 @dataclass
 class PolygonObstacle(Obstacle):
-    vertices: np.ndarray # shape: N, 2
+    vertices: np.ndarray 
 
     def __post_init__(self):
         self.type = ObstacleType.POLYGON
@@ -118,7 +119,6 @@ class PolygonObstacle(Obstacle):
     def contains_point(self, x: float, y: float) -> bool:
         n = len(self.vertices)
         inside = False
-
         p1x, p1y = self.vertices[0]
         for i in range(1, n + 1):
             p2x, p2y = self.vertices[i % n]
@@ -132,6 +132,9 @@ class PolygonObstacle(Obstacle):
         return inside
     
     def distance_to_point(self, x: float, y: float) -> float:
+        if self.contains_point(x, y):
+            return 0.0
+            
         min_dist =  float('inf')
         point = np.array([x, y])
         
@@ -139,36 +142,31 @@ class PolygonObstacle(Obstacle):
         for i in range(n):
             v1 = self.vertices[i]
             v2 = self.vertices[(i+1) % n]
-
             dist = self._point_to_segment_distance(point, v1, v2)
             min_dist = min(min_dist, dist)
         
         return min_dist
     
     @staticmethod
-    def _point_to_segment_distance(point: np.ndarray,
-                                   seg_start: np.ndarray,
-                                   seg_end: np.ndarray) -> float:
+    def _point_to_segment_distance(point, seg_start, seg_end):
         segment = seg_end - seg_start
         point_vec = point - seg_start
-
         segment_length_sq = np.dot(segment, segment)
         if segment_length_sq < 1e-10:
             return np.linalg.norm(point_vec)
-        
         t = np.clip(np.dot(point_vec, segment) / segment_length_sq, 0, 1)
         projection = seg_start + t * segment
         return np.linalg.norm(point - projection)
-
 
 class Map2D:
     """
     2D map environment with obstacles.
     Handles collision detection and map representation.
     """
-    def __init__(self, width: float, height: float):
+    def __init__(self, width: float, height: float, safety_margin: float = 1.0):
         self.width = width
         self.height = height
+        self.safety_margin = safety_margin
         self.obstacles: List[Obstacle] = []
         self.start: Optional[Tuple[float, float]] = None
         self.goal: Optional[Tuple[float, float]] = None
@@ -190,13 +188,12 @@ class Map2D:
         """Set goal position."""
         self.goal = (x, y)
     
-    def is_collision(self, x: float, y: float, safety_margin: float = 0) -> bool:
+    def is_collision(self, x: float, y: float, safety_margin: Optional[float] = None) -> bool:
         """
         Check if point collides with any obstacle.
         
         Args:
             x, y: Point coordinates
-            safety_margin: Additional safety distance around obstacles
             
         Returns:
             True if collision detected
@@ -204,7 +201,8 @@ class Map2D:
         #Check map boundaries
         if not (0 <= x <= self.width and 0 <= y <= self.height):
             return True
-        
+        if safety_margin is None:
+            safety_margin = self.safety_margin
         # Check obstacles
         for obstacle in self.obstacles:
             if safety_margin > 0:
@@ -256,6 +254,7 @@ class Map2D:
         data = {
             "width": self.width,
             "height": self.height,
+            "safety_margin": self.safety_margin,
             "start": self.start,
             "goal": self.goal,
             "obstacles": []
@@ -293,7 +292,8 @@ class Map2D:
         with open(filename, 'r') as f:
             data = json.load(f)
         
-        map_obj = cls(data["width"], data["height"])
+        safety = data.get("safety_margin", 0.0)
+        map_obj = cls(data["width"], data["height"], safety_margin=safety)
         
         if "start" in data and data["start"]:
             map_obj.start = tuple(data["start"])

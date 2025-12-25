@@ -106,13 +106,12 @@ class BasePlanner(ABC):
         """
         pass
 
-    def is_valid_position(self, x: float, y: float, 
-                          safety_margin: float = 0) -> bool:
+    def is_valid_position(self, x: float, y: float) -> bool:
         if not (0 <= x <= self.map_env.width and
                 0 <= y <= self.map_env.height):
             return False
         
-        return not self.map_env.is_collision(x, y, safety_margin)
+        return not self.map_env.is_collision(x, y)
     
     def is_valid_path(self, p1: Tuple[float, float],
                       p2: Tuple[float, float], 

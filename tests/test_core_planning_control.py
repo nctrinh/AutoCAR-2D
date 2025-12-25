@@ -248,7 +248,7 @@ def test_integration():
         
         # Check collision
         pos = vehicle.get_position()
-        if map_env.is_collision(pos[0], pos[1], safety_margin=0.5):
+        if map_env.is_collision(pos[0], pos[1]):
             print(f"✗ Collision detected at step {step}!")
             collision_detected = True
             break
