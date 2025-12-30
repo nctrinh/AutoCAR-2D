@@ -8,7 +8,7 @@ vehicle:
   length: 4.0
   width: 2.0
   wheelbase: 2.5
-  max_velocity: 10
+  max_velocity: 5
   max_acceleration: 3.0
   max_deceleration: -5.0
   max_steering_angle: 0.6 # ~34 degrees
@@ -98,16 +98,13 @@ visualization:
 map:
   width: 100
   height: 100
-  safety_margin: 4.0   # Tăng margin lên một chút cho dễ thở
+  safety_margin: 4.0
   start: [10.0, 10.0]
   goal: [90.0, 90.0]
 
+  templates: 'custom' # for RL testing
+
   obstacles:
-    # =====================
-    # THE GATES (Hai bức tường so le)
-    # =====================
-    
-    # Tường 1: Chặn bên trái, buộc robot đi sang phải
     - type: "rectangle"
       x: 30
       y: 35
@@ -115,7 +112,6 @@ map:
       height: 4
       angle: 0.0
 
-    # Tường 2: Chặn bên phải, buộc robot đi sang trái
     - type: "rectangle"
       x: 70
       y: 65
@@ -123,37 +119,26 @@ map:
       height: 4
       angle: 0.0
 
-    # =====================
-    # PILLARS (Các trụ tròn để bo cua)
-    # =====================
-    # Những trụ này đặt ở vị trí chiến lược để robot không thể
-    # cắt góc quá gắt (short-cut) mà phải lượn vòng.
-
-    # Trụ ở khu vực xuất phát
     - type: "circle"
       x: 40
       y: 15
       radius: 3
 
-    # Trụ ở khe hở đầu tiên (bên phải)
     - type: "circle"
       x: 80
       y: 35
       radius: 2
 
-    # Trụ ở khu vực giữa map
     - type: "circle"
       x: 50
       y: 50
       radius: 4
 
-    # Trụ ở khe hở thứ hai (bên trái)
     - type: "circle"
       x: 20
       y: 65
       radius: 2
 
-    # Trụ bảo vệ vùng Goal
     - type: "circle"
       x: 75
       y: 85
