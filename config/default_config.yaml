@@ -14,12 +14,13 @@ vehicle:
   max_steering_angle: 0.6 # ~34 degrees
 
 planner:
-  algorithm: rrt
+  algorithm: astar
 
   astar:
-    max_iterations: 10000
+    max_iterations: 30000
     grid_resolution: 0.5
     heuristic_weight: 1.5
+    spacing: 1.0
 
   rrt:
     max_iterations: 10000
@@ -28,14 +29,14 @@ planner:
     goal_sample_rate: 0.1
 
   rrt_star:
-    max_iterations: 1000
+    max_iterations: 10000
     goal_threshold: 2.0
     step_size: 0.5
     goal_sample_rate: 0.1
     rewire_radius: 5.0
 
 controller:
-  type: "pid"   # pid | pure_pursuit | adaptive_pure_pursuit
+  type: "pure_pursuit"   # pid | pure_pursuit | adaptive_pure_pursuit
 
   pid:
     kp_lateral: 1.5

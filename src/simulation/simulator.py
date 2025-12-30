@@ -168,7 +168,8 @@ class Simulator:
                 map_env=self.map_env,
                 grid_resolution=astar_cfg.get("grid_resolution", 0.5),
                 heuristic_weight=astar_cfg.get("heuristic_weight", 1.0),
-                max_iterations=astar_cfg.get("max_iterations", 10000)
+                max_iterations=astar_cfg.get("max_iterations", 10000),
+                spacing=astar_cfg.get("spacing", 3.0)
             )
 
         elif planner_name == "rrt":

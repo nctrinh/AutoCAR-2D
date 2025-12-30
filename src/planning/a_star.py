@@ -12,11 +12,13 @@ from src.core.map import Map2D
 
 class AStarPlanner(BasePlanner):
     def __init__(self, map_env: Map2D, grid_resolution: float = 0.5, 
-                 max_iterations: int = 100000, heuristic_weight: float = 1.0):
+                 max_iterations: int = 10000, heuristic_weight: float = 1.0,
+                 spacing: float = 3.0):
         self.map_env = map_env
         self.grid_resolution = grid_resolution
         self.max_iterations = max_iterations
         self.heuristic_weight = heuristic_weight
+        self.spacing = spacing
         
         self.grid_width = int(np.ceil(self.map_env.width / self.grid_resolution))
         self.grid_height = int(np.ceil(self.map_env.height / self.grid_resolution))
@@ -147,6 +149,7 @@ class AStarPlanner(BasePlanner):
         raw_path = Path(path_points)
         
         smoothed_path = self._smooth_path(raw_path)
+        smoothed_path = self._resample_path(smoothed_path)
         
         return smoothed_path
 
@@ -177,6 +180,38 @@ class AStarPlanner(BasePlanner):
             smoothed.append(path.points[current_idx])
         
         return Path(smoothed)
+    
+    def _resample_path(self, path: Path) -> Path:
+        if not path.points or len(path.points) < 2:
+            return path
+        
+        points_arr = path.to_array()
+        x = points_arr[:, 0]
+        y = points_arr[:, 1]
+
+        dx = np.diff(x)
+        dy = np.diff(y)
+        dist = np.hypot(dx, dy)
+        
+        cum_dist = np.concatenate(([0], np.cumsum(dist)))
+        total_length = cum_dist[-1]
+        
+        if total_length < self.spacing:
+            return path
+
+        n_points = int(total_length / self.spacing)
+        new_cum_dist = np.linspace(0, total_length, n_points + 1)
+
+        new_x = np.interp(new_cum_dist, cum_dist, x)
+        new_y = np.interp(new_cum_dist, cum_dist, y)
+
+        new_points = [PathPoint(nx, ny) for nx, ny in zip(new_x, new_y)]
+        
+        original_goal = path.points[-1]
+        new_points[-1] = PathPoint(original_goal.x, original_goal.y)
+
+        return Path(new_points)
+
     def is_path_valid(self, p1: Tuple[float, float], p2: Tuple[float, float], num_samples: int = 10) -> bool:
         x1, y1 = p1
         x2, y2 = p2
