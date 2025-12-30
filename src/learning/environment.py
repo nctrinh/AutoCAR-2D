@@ -259,7 +259,6 @@ class AutonomousCarEnv(gym.Env):
                     readings[i] = dist / self.lidar_range
                     break
                 
-                # Check vật cản (Hàm này nên được tối ưu bên class Map2D)
                 if self.map_env.is_collision(rx, ry):
                     readings[i] = dist / self.lidar_range
                     break

@@ -34,14 +34,21 @@ def load_map(map_name: Optional[str], config: ConfigLoader) -> Map2D:
     map_env.set_goal(goal[0], goal[1])
 
     # --- Load Template Maps ---
-    if map_name == 'simple':
+    if map_name == 'easy':
         map_env.add_obstacle(CircleObstacle(x=30, y=30, radius=8))
         map_env.add_obstacle(CircleObstacle(x=70, y=70, radius=8))
-    elif map_name == 'complex':
+    elif map_name == 'medium':
         map_env.add_obstacle(CircleObstacle(x=30, y=30, radius=8))
         map_env.add_obstacle(RectangleObstacle(x=60, y=50, width=15, height=30))
         map_env.add_obstacle(CircleObstacle(x=70, y=20, radius=6))
         map_env.add_obstacle(CircleObstacle(x=60, y=75, radius=7))
+    elif map_name == 'hard':
+        for _ in range(20):
+            map_env.add_obstacle(CircleObstacle(
+                np.random.uniform(0, map_env.width), 
+                np.random.uniform(0, map_env.height), 
+                np.random.uniform(1, 4)
+            ))
     elif map_name == 'maze':
         map_env.add_obstacle(RectangleObstacle(x=25, y=20, width=10, height=40))
         map_env.add_obstacle(RectangleObstacle(x=50, y=40, width=10, height=40))
@@ -140,6 +147,7 @@ def visualize_episode_with_renderer(model, env: AutonomousCarEnv, config: Config
             action, _ = model.predict(obs, deterministic=True)
             
             obs, reward, terminated, truncated, info = env.step(action)
+            print(obs)
             
             episode_reward += reward
             steps += 1
@@ -159,7 +167,13 @@ def visualize_episode_with_renderer(model, env: AutonomousCarEnv, config: Config
             renderer.draw_map(env.map_env)
             if env.map_env.start and env.map_env.goal:
                 renderer.draw_start_goal(env.map_env.start, env.map_env.goal)
-        
+        renderer.draw_lidar_zone(
+                vehicle=env.vehicle,
+                sensor_range=env.lidar_range,
+                fov_deg=360,
+                color=(0, 255, 255), # Cyan
+                alpha=40
+            )
         renderer.draw_trajectory()
         
         if env.vehicle:
@@ -213,7 +227,7 @@ def main():
     parser.add_argument('--model', type=str, required=True, help='Path to trained model')
     parser.add_argument('--config', type=str, default='config/RL_config.yaml', help='Config path')
     parser.add_argument('--algorithm', type=str, default='ppo', choices=['ppo', 'sac'])
-    parser.add_argument('--map', type=str, default=None, choices=['simple', 'complex', 'maze', 'custom'])
+    parser.add_argument('--map', type=str, default=None, choices=['easy', 'medium', 'hard', 'maze', 'custom'])
     parser.add_argument('--episodes', type=int, default=10, help='Number of evaluation episodes')
     parser.add_argument('--visualize', action='store_true', help='Visualize with Renderer')
     

@@ -70,7 +70,7 @@ class Renderer:
         self.show_path = True
         self.show_trajectory = True
         self.show_info = True
-        self.show_sensors = False
+        self.show_sensors = True
 
         self.trajectory : List[Tuple[float, float]] = []
         self.max_trajectory_length = 500
@@ -160,6 +160,50 @@ class Renderer:
         
         pygame.draw.line(self.screen, Color.YELLOW, start, end, 3)
         pygame.draw.circle(self.screen, Color.YELLOW, end, 5)
+
+    def draw_lidar_zone(self, vehicle: Vehicle, 
+                       sensor_range: float = 15.0, 
+                       fov_deg: float = 360.0, 
+                       color: Tuple[int, int, int] = (0, 255, 255), 
+                       alpha: int = 50):
+        if not self.show_sensors:
+            return
+        overlay = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
+        
+        rgba_color = (*color, alpha)
+        
+        pos = vehicle.get_position() 
+        heading = vehicle.state.theta
+        
+        center_screen = self.world_to_screen(pos[0], pos[1])
+        
+        points = [center_screen]
+        
+        if fov_deg >= 360:
+            radius = int(sensor_range * self.scale_x)
+            pygame.draw.circle(overlay, rgba_color, center_screen, radius)
+            pygame.draw.circle(self.screen, color, center_screen, radius, 1)
+        else:
+            fov_rad = np.radians(fov_deg)
+            start_angle = heading - fov_rad / 2
+            end_angle = heading + fov_rad / 2
+
+            num_points = int(fov_deg / 5) + 2 
+            angles = np.linspace(start_angle, end_angle, num_points)
+            
+            for angle in angles:
+                wx = pos[0] + sensor_range * np.cos(angle)
+                wy = pos[1] + sensor_range * np.sin(angle)
+                
+                sx, sy = self.world_to_screen(wx, wy)
+                points.append((sx, sy))
+            
+            if len(points) > 2:
+                pygame.draw.polygon(overlay, rgba_color, points)
+                
+                pygame.draw.lines(self.screen, color, True, points, 1)
+
+        self.screen.blit(overlay, (0, 0))
 
     def draw_path(self, path: PlannedPath, color: Tuple[int, int, int] = Color.RED):
         """Draw planned path."""
