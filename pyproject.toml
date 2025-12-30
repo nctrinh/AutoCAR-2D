@@ -13,6 +13,11 @@ scipy = "^1.7.0"
 pygame = "^2.1.0"
 matplotlib = "^3.5.0"
 opencv-python = "^4.5.0"
+gymnasium = "^1.2.3"
+stable-baselines3 = "^2.7.1"
+tqdm = "^4.67.1"
+rich = "^14.2.0"
+tensorboard = "^2.20.0"
 
 
 [build-system]
