@@ -9,7 +9,7 @@ class VehicleConfig:
     wheelbase: float = 2.5 # distance between front and rear axles
     max_velocity: float =  10.0 # m/s
     max_acceleration: float = 3.0 # m/s^2
-    max_deceleration: float = -5.0 # m/s^2
+    max_deceleration: float = -3.0 # m/s^2
     max_steering_angle: float = 0.6 # radian
 
 @dataclass
@@ -73,7 +73,8 @@ class Vehicle:
         )
 
         new_velocity = self.state.velocity + acceleration * self.dt
-        new_velocity = np.clip(new_velocity, 0, self.config.max_velocity)
+        max_reverse_speed = self.config.max_velocity / 2.0 
+        new_velocity = np.clip(new_velocity, -max_reverse_speed, self.config.max_velocity)
 
         if abs(new_velocity) >= 1e-3:
             theta_dot = (new_velocity / self.config.wheelbase) * np.tan(steering_angle)

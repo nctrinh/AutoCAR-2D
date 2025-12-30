@@ -76,7 +76,6 @@ map:
 
 
   # TEMPLATE FOR EVALUATE: "easy", "medium", "hard", "maze". if 'custom', use obstacles below
-  eval_template: "hard" 
   
   eval_obstacles:
     - type: "rectangle"
