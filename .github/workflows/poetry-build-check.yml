@@ -1,4 +1,4 @@
-name: Build Check
+name: Poetry Build Check on Ubuntu-24.04 with Python3.12
 
 on:
   push:

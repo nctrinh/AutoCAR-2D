@@ -1,0 +1,35 @@
+name: Pip Build Check on Ubuntu-24.04 with Python3.12
+
+on:
+  push:
+    branches: [ main, nctrinh/dev ]
+  pull_request:
+    branches: [ main, nctrinh/dev ]
+
+jobs:
+  check-requirements:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: Check if requirements.txt exists
+      id: check_file
+      run: |
+        if [ -f requirements.txt ]; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "::warning::File requirements.txt not found!"
+        fi
+
+    - name: Install dependencies from requirements.txt
+      if: steps.check_file.outputs.exists == 'true'
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
