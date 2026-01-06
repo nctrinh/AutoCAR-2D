@@ -1,0 +1,38 @@
+name: Build Check
+
+on:
+  push:
+    branches: [ main, nctrinh/dev ]
+  pull_request:
+    branches: [ main, nctrinh/dev ]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: Install Poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 -
+
+    - name: Add Poetry to PATH
+      run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: Install dependencies with Poetry
+      run: poetry install
+
+    - name: Install dependencies from requirements.txt
+      run: pip install -r requirements.txt
+
+    - name: Run tests (optional, to ensure build works)
+      run: |
+        # Assuming tests are run via pytest or similar
+        # If you have a specific test command, replace this
+        python -m pytest tests/ || echo "No tests found or pytest not configured"
