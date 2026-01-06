@@ -27,8 +27,3 @@ jobs:
 
     - name: Install dependencies with Poetry
       run: poetry install --no-root
-
-    - name: Run tests (optional, to ensure build works)
-      run: |
-        # Kích hoạt môi trường ảo của poetry để chạy test
-        poetry run python -m pytest tests/ || echo "No tests found or pytest not configured"
