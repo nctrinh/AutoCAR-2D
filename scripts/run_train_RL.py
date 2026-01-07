@@ -11,7 +11,6 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from src.learning.environment import AutonomousCarEnv
 from src.core.map import Map2D, CircleObstacle, RectangleObstacle, PolygonObstacle
-# Giả sử bạn đã có class ConfigLoader, hoặc dùng trực tiếp yaml như bên dưới
 
 class ConfigLoader:
     def __init__(self, path):

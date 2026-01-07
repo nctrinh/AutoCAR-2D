@@ -32,7 +32,7 @@ class AutonomousCarEnv(gym.Env):
         - Smooth control: penalty for large actions
     """
 
-    meatadata = {'render_mode': {'human', 'rgb_array'}, 'render_fps': 60}
+    metadata = {'render_mode': {'human', 'rgb_array'}, 'render_fps': 60}
 
     def __init__(self, 
                  map_env: Optional[Map2D] = None,
@@ -128,7 +128,7 @@ class AutonomousCarEnv(gym.Env):
         else:
             self.prev_distance_to_goal = 0.0
         
-        observation = self._get_observation()
+        lidar_data, observation = self._get_observation()
         info = self._get_info()
         
         return observation, info
@@ -151,28 +151,30 @@ class AutonomousCarEnv(gym.Env):
         self.vehicle.update(acceleration, steering)
         
         # Get observation
-        observation = self._get_observation()
-        
-        # Calculate reward
-        reward = self._calculate_reward(action)
+        lidar_data, observation = self._get_observation()
         
         # Check termination conditions
         terminated = False
         truncated = False
-        
-        # Check collision
+        is_collision = False
+        is_goal_reached = False
+
         pos = self.vehicle.get_position()
+        
         if self.map_env.is_collision(pos[0], pos[1], safety_margin=1.0):
-            reward -= 100.0  # Large penalty
+            is_collision = True
             terminated = True
         
-        # Check goal reached
+        # Check về đích
         if self.map_env.goal:
             distance_to_goal = self.vehicle.distance_to(*self.map_env.goal)
             if distance_to_goal < 3.0:
-                reward += 100.0  # Large reward
+                is_goal_reached = True
                 terminated = True
-        
+
+        # Calculate reward
+        reward = self._calculate_reward(action, lidar_data, is_collision, is_goal_reached)
+
         # Check max steps
         self.steps += 1
         if self.steps >= self.max_steps:
@@ -236,7 +238,7 @@ class AutonomousCarEnv(gym.Env):
         
         observation = np.concatenate([vehicle_state, goal_info, lidar_data])
         
-        return observation
+        return lidar_data, observation
 
     def _get_lidar_readings(self) -> np.ndarray:
         pos = self.vehicle.get_position()
@@ -265,36 +267,42 @@ class AutonomousCarEnv(gym.Env):
                     
         return readings
     
-    def _calculate_reward(self, action: np.ndarray) -> float:
+    def _calculate_reward(self, action: np.ndarray, lidar_data: np.ndarray, 
+                         is_collision: bool, is_goal_reached: bool) -> float:
+        # Quay về các trọng số cơ bản giống Code 1
         reward = 0.0
         
+        # 1. TERMINAL REWARDS
+        if is_collision:
+            return -50.0 # Giống Code 1
+        
+        if is_goal_reached:
+            return 50.0 # Giống Code 1
+
+        # 2. PROGRESS REWARD (Quan trọng nhất)
         if self.map_env.goal:
             current_distance = self.vehicle.distance_to(*self.map_env.goal)
+            # Thưởng cho việc giảm khoảng cách
             progress = self.prev_distance_to_goal - current_distance
-            reward += progress
+            reward += progress * 2.0 # Tăng trọng số progress lên một chút
             self.prev_distance_to_goal = current_distance
 
-        lidar_readings = self._get_lidar_readings()
-        min_lidar = np.min(lidar_readings)
+        # 3. SAFETY PENALTY (Nhẹ nhàng thôi)
+        min_lidar = np.min(lidar_data)
+        if min_lidar < 0.4:
+             reward -= 10.0 * (0.4 - min_lidar) # Giống Code 1
+
+        # 4. TIME PENALTY (Để khuyến khích đi nhanh một cách tự nhiên)
+        reward -= 0.5 
+
+        current_speed = self.vehicle.state.velocity 
         
-        if min_lidar < 0.2: 
-            reward -= 2.0 * (0.2 - min_lidar) 
-
-        pos = self.vehicle.get_position()
-        if self.map_env.is_collision(pos[0], pos[1], safety_margin=1.0):
-            reward -= 50.0
-            return reward
-
-        if self.map_env.goal and current_distance < 3.0:
-            reward += 50.0
-            return reward
-
-        reward -= 0.5 * np.abs(action[1])
+        # a. Thưởng tuyến tính cho tốc độ (đi càng nhanh càng được thưởng, nhưng phải an toàn)
+        reward += current_speed * 0.2  
         
-        action_diff = action - self.prev_action
-        reward -= 0.2 * np.sum(action_diff**2)
-
-        reward -= 0.05
+        # b. (Tùy chọn) Phạt nếu xe đứng yên hoặc đi quá chậm
+        if current_speed < 0.1:
+            reward -= 1.0  # Phạt nặng để ép xe phải nhích bánh
 
         return reward
     
@@ -390,66 +398,9 @@ class AutonomousCarEnv(gym.Env):
             
             end_x = pos[0] + distance * np.cos(ray_angle)
             end_y = pos[1] + distance * np.sin(ray_angle)
-            
-            # Draw ray (would need to add method to renderer)
-            # self.renderer.draw_line(pos[0], pos[1], end_x, end_y, color=(255, 255, 0))
     
     def close(self):
         """Clean up resources."""
         if self.renderer is not None:
             self.renderer.close()
             self.renderer = None
-
-
-# Example usage and testing
-if __name__ == "__main__":
-    print("Testing RL Environment...")
-    print("="*70)
-    
-    # Create environment
-    env = AutonomousCarEnv(render_mode=None)
-    
-    print(f"Observation space: {env.observation_space}")
-    print(f"Action space: {env.action_space}")
-    print(f"Observation dim: {env.observation_space.shape[0]}")
-    
-    # Test reset
-    obs, info = env.reset()
-    print(f"\nInitial observation shape: {obs.shape}")
-    print(f"Initial info: {info}")
-    
-    # Test random episode
-    print("\nRunning random episode...")
-    total_reward = 0
-    done = False
-    steps = 0
-    
-    while not done and steps < 100:
-        action = env.action_space.sample()
-        obs, reward, terminated, truncated, info = env.step(action)
-        total_reward += reward
-        steps += 1
-        done = terminated or truncated
-        
-        if steps % 20 == 0:
-            print(f"  Step {steps}: reward={reward:.3f}, "
-                  f"distance={info.get('distance_to_goal', 0):.2f}m")
-    
-    print(f"\nEpisode finished after {steps} steps")
-    print(f"Total reward: {total_reward:.2f}")
-    print(f"Terminated: {terminated}, Truncated: {truncated}")
-    
-    # Test with Stable-Baselines3 check
-    try:
-        from stable_baselines3.common.env_checker import check_env
-        print("\n" + "="*70)
-        print("Checking environment compatibility with Stable-Baselines3...")
-        check_env(env)
-        print("✓ Environment is compatible with Stable-Baselines3!")
-    except ImportError:
-        print("\nStable-Baselines3 not installed. Skipping compatibility check.")
-    except Exception as e:
-        print(f"\n✗ Environment check failed: {e}")
-    
-    env.close()
-    print("\n✓ Environment test complete!")

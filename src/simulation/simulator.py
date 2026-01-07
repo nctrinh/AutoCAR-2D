@@ -87,55 +87,58 @@ class Simulator:
     
     def _load_map(self) -> Map2D:
         """Load map environment from config."""
-        world_width = self.map_params.get("width", 100)
-        world_height = self.map_params.get("height", 100)
-        safety_margin = self.map_params.get("safety_margin", 1.0)
+        if self.map_params.get("map_json") != '':
+            map_env = Map2D.load_from_yaml(self.map_params.get("map_json"))
+        else:
+            world_width = self.map_params.get("width", 100)
+            world_height = self.map_params.get("height", 100)
+            safety_margin = self.map_params.get("safety_margin", 1.0)
 
-        map_env = Map2D(world_width, world_height, safety_margin)
+            map_env = Map2D(world_width, world_height, safety_margin)
 
-        start = self.map_params.get("start", None)
-        goal = self.map_params.get("goal", None)
+            start = self.map_params.get("start", None)
+            goal = self.map_params.get("goal", None)
 
-        if start is not None:
-            if len(start) != 2:
-                raise ValueError("map.start must be [x, y]")
-            map_env.set_start(start[0], start[1])
+            if start is not None:
+                if len(start) != 2:
+                    raise ValueError("map.start must be [x, y]")
+                map_env.set_start(start[0], start[1])
 
-        if goal is not None:
-            if len(goal) != 2:
-                raise ValueError("map.goal must be [x, y]")
-            map_env.set_goal(goal[0], goal[1])
+            if goal is not None:
+                if len(goal) != 2:
+                    raise ValueError("map.goal must be [x, y]")
+                map_env.set_goal(goal[0], goal[1])
 
-        obstacles_cfg = self.map_params.get("obstacles", [])
+            obstacles_cfg = self.map_params.get("obstacles", [])
 
-        for obs_cfg in obstacles_cfg:
-            obs_type = obs_cfg.get("type")
+            for obs_cfg in obstacles_cfg:
+                obs_type = obs_cfg.get("type")
 
-            if obs_type == "circle":
-                obstacle = CircleObstacle(
-                    x=obs_cfg["x"],
-                    y=obs_cfg["y"],
-                    radius=obs_cfg["radius"],
-                )
+                if obs_type == "circle":
+                    obstacle = CircleObstacle(
+                        x=obs_cfg["x"],
+                        y=obs_cfg["y"],
+                        radius=obs_cfg["radius"],
+                    )
 
-            elif obs_type == "rectangle":
-                obstacle = RectangleObstacle(
-                    x=obs_cfg["x"],
-                    y=obs_cfg["y"],
-                    width=obs_cfg["width"],
-                    height=obs_cfg["height"],
-                    angle=obs_cfg.get("angle", 0.0),
-                )
+                elif obs_type == "rectangle":
+                    obstacle = RectangleObstacle(
+                        x=obs_cfg["x"],
+                        y=obs_cfg["y"],
+                        width=obs_cfg["width"],
+                        height=obs_cfg["height"],
+                        angle=obs_cfg.get("angle", 0.0),
+                    )
 
-            elif obs_type == "polygon":
-                obstacle = PolygonObstacle(
-                    vertices=np.array(obs_cfg["vertices"])
-                )
+                elif obs_type == "polygon":
+                    obstacle = PolygonObstacle(
+                        vertices=np.array(obs_cfg["vertices"])
+                    )
 
-            else:
-                raise ValueError(f"Unknown obstacle type: {obs_type}")
+                else:
+                    raise ValueError(f"Unknown obstacle type: {obs_type}")
 
-            map_env.add_obstacle(obstacle)
+                map_env.add_obstacle(obstacle)
 
         print(
             f"Map loaded: size=({map_env.width}, {map_env.height}), "

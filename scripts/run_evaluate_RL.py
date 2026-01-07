@@ -21,52 +21,56 @@ from src.simulation.renderer import Renderer
 def load_map(map_name: Optional[str], config: ConfigLoader) -> Map2D:
     """Load map environment từ config."""
     map_params = config.get_map_params()
-    
-    world_width = map_params.get("width", 100)
-    world_height = map_params.get("height", 100)
-    safety_margin = map_params.get("safety_margin", 1.0)
 
-    map_env = Map2D(world_width, world_height, safety_margin)
+    if map_params.get("map_json") != '':
+        map_env = Map2D.load_from_yaml(map_params.get("map_json"))
+        return map_env
+    else:
+        world_width = map_params.get("width", 100)
+        world_height = map_params.get("height", 100)
+        safety_margin = map_params.get("safety_margin", 1.0)
 
-    start = map_params.get("start", [10, 10])
-    goal = map_params.get("goal", [90, 90])
-    map_env.set_start(start[0], start[1])
-    map_env.set_goal(goal[0], goal[1])
+        map_env = Map2D(world_width, world_height, safety_margin)
 
-    # --- Load Template Maps ---
-    if map_name == 'easy':
-        map_env.add_obstacle(CircleObstacle(x=30, y=30, radius=8))
-        map_env.add_obstacle(CircleObstacle(x=70, y=70, radius=8))
-    elif map_name == 'medium':
-        map_env.add_obstacle(CircleObstacle(x=30, y=30, radius=8))
-        map_env.add_obstacle(RectangleObstacle(x=60, y=50, width=15, height=30))
-        map_env.add_obstacle(CircleObstacle(x=70, y=20, radius=6))
-        map_env.add_obstacle(CircleObstacle(x=60, y=75, radius=7))
-    elif map_name == 'hard':
-        for _ in range(20):
-            map_env.add_obstacle(CircleObstacle(
-                np.random.uniform(0, map_env.width), 
-                np.random.uniform(0, map_env.height), 
-                np.random.uniform(1, 4)
-            ))
-    elif map_name == 'maze':
-        map_env.add_obstacle(RectangleObstacle(x=25, y=20, width=10, height=40))
-        map_env.add_obstacle(RectangleObstacle(x=50, y=40, width=10, height=40))
-        map_env.add_obstacle(RectangleObstacle(x=75, y=20, width=10, height=40))
-        map_env.add_obstacle(CircleObstacle(x=40, y=65, radius=8))
-    elif map_name == 'custom' or map_name is None:
-        # Load obstacles from YAML if map_name is custom or None
-        obstacles_cfg = map_params.get("eval_obstacles", [])
-        for obs_cfg in obstacles_cfg:
-            obs_type = obs_cfg.get("type")
-            if obs_type == "circle":
-                map_env.add_obstacle(CircleObstacle(obs_cfg["x"], obs_cfg["y"], obs_cfg["radius"]))
-            elif obs_type == "rectangle":
-                map_env.add_obstacle(RectangleObstacle(obs_cfg["x"], obs_cfg["y"], obs_cfg["width"], obs_cfg["height"], obs_cfg.get("angle", 0.0)))
-            elif obs_type == "polygon":
-                map_env.add_obstacle(PolygonObstacle(np.array(obs_cfg["vertices"])))
+        start = map_params.get("start", [10, 10])
+        goal = map_params.get("goal", [90, 90])
+        map_env.set_start(start[0], start[1])
+        map_env.set_goal(goal[0], goal[1])
 
-    return map_env
+        # --- Load Template Maps ---
+        if map_name == 'easy':
+            map_env.add_obstacle(CircleObstacle(x=30, y=30, radius=8))
+            map_env.add_obstacle(CircleObstacle(x=70, y=70, radius=8))
+        elif map_name == 'medium':
+            map_env.add_obstacle(CircleObstacle(x=30, y=30, radius=8))
+            map_env.add_obstacle(RectangleObstacle(x=60, y=50, width=15, height=30))
+            map_env.add_obstacle(CircleObstacle(x=70, y=20, radius=6))
+            map_env.add_obstacle(CircleObstacle(x=60, y=75, radius=7))
+        elif map_name == 'hard':
+            for _ in range(20):
+                map_env.add_obstacle(CircleObstacle(
+                    np.random.uniform(0, map_env.width), 
+                    np.random.uniform(0, map_env.height), 
+                    np.random.uniform(1, 4)
+                ))
+        elif map_name == 'maze':
+            map_env.add_obstacle(RectangleObstacle(x=25, y=20, width=10, height=40))
+            map_env.add_obstacle(RectangleObstacle(x=50, y=40, width=10, height=40))
+            map_env.add_obstacle(RectangleObstacle(x=75, y=20, width=10, height=40))
+            map_env.add_obstacle(CircleObstacle(x=40, y=65, radius=8))
+        elif map_name == 'custom' or map_name is None:
+            # Load obstacles from YAML if map_name is custom or None
+            obstacles_cfg = map_params.get("eval_obstacles", [])
+            for obs_cfg in obstacles_cfg:
+                obs_type = obs_cfg.get("type")
+                if obs_type == "circle":
+                    map_env.add_obstacle(CircleObstacle(obs_cfg["x"], obs_cfg["y"], obs_cfg["radius"]))
+                elif obs_type == "rectangle":
+                    map_env.add_obstacle(RectangleObstacle(obs_cfg["x"], obs_cfg["y"], obs_cfg["width"], obs_cfg["height"], obs_cfg.get("angle", 0.0)))
+                elif obs_type == "polygon":
+                    map_env.add_obstacle(PolygonObstacle(np.array(obs_cfg["vertices"])))
+
+        return map_env
 
 def evaluate_episode(model, env: AutonomousCarEnv, render: bool = False, deterministic: bool = True) -> dict:
     """Evaluate one episode without Pygame rendering logic (Headless mode)."""
@@ -147,7 +151,6 @@ def visualize_episode_with_renderer(model, env: AutonomousCarEnv, config: Config
             action, _ = model.predict(obs, deterministic=True)
             
             obs, reward, terminated, truncated, info = env.step(action)
-            print(obs)
             
             episode_reward += reward
             steps += 1
