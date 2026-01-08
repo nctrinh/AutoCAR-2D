@@ -23,6 +23,18 @@ class AStarPlanner(BasePlanner):
         self.grid_width = int(np.ceil(self.map_env.width / self.grid_resolution))
         self.grid_height = int(np.ceil(self.map_env.height / self.grid_resolution))
 
+        self.occupancy_grid = self._create_occupancy_grid()
+    
+    def _create_occupancy_grid(self) -> np.ndarray:
+        grid = np.zeros((self.grid_width, self.grid_height), dtype=bool)
+        
+        for x in range(self.grid_width):
+            for y in range(self.grid_height):
+                wx, wy = self.grid_to_world(x, y)
+                if self.is_valid_position(wx, wy):
+                    grid[x, y] = True
+        return grid
+
     def world_to_grid(self, x: float, y: float) -> Tuple[int, int]:
         grid_x = int(np.floor(x / self.grid_resolution))
         grid_y = int(np.floor(y / self.grid_resolution))
@@ -41,11 +53,11 @@ class AStarPlanner(BasePlanner):
         goal_grid = self.world_to_grid(goal[0], goal[1])
 
         # Validate Start/Goal
-        if not self.is_valid_position(start[0], start[1]):
+        if not self.occupancy_grid[start_grid[0], start_grid[1]]:
             print("A*: Start position is invalid!")
             return None
         
-        if not self.is_valid_position(goal[0], goal[1]):
+        if not self.occupancy_grid[goal_grid[0], goal_grid[1]]:
             print("A*: Goal position is invalid!")
             return None
         
@@ -61,42 +73,57 @@ class AStarPlanner(BasePlanner):
         counter = 0
         self.iterations = 0
 
+        w = self.heuristic_weight
+        # Chi phí di chuyển: Thẳng = 1.0, Chéo = 1.414
+        COST_STRAIGHT = 1.0 * self.grid_resolution
+        COST_DIAGONAL = 1.414 * self.grid_resolution 
+        
         while open_set and self.iterations < self.max_iterations:
             self.iterations += 1
             _, _, current = heapq.heappop(open_set)
 
-            # Check goal condition
             if current == goal_grid:
                 path = self._reconstruct_path(came_from, current, start, goal)
-                
                 self.planning_time = time.time() - start_time
-                self.path = path
-                
-                print(f"A*: Path found! Length: {path.length:.2f}m, "
-                      f"Time: {self.planning_time:.3f}s, Iterations: {self.iterations}")
+                print(f"Path found! Length: {path.length:.2f}m, Time: {self.planning_time:.3f}s, Iterations: {self.iterations}")
                 return path
 
+            if current in closed_set:
+                continue
             closed_set.add(current)
 
-            for neighbor in self._get_grid_neighbors(current):
-                if neighbor in closed_set:
+            cx, cy = current
+
+            neighbors_check = [
+                (0, 1, COST_STRAIGHT), (0, -1, COST_STRAIGHT), 
+                (1, 0, COST_STRAIGHT), (-1, 0, COST_STRAIGHT),
+                (1, 1, COST_DIAGONAL), (1, -1, COST_DIAGONAL),
+                (-1, 1, COST_DIAGONAL), (-1, -1, COST_DIAGONAL)
+            ]
+
+            for dx, dy, move_cost in neighbors_check:
+                nx, ny = cx + dx, cy + dy
+
+                if not (0 <= nx < self.grid_width and 0 <= ny < self.grid_height):
+                    continue
+                if not self.occupancy_grid[nx, ny]:
+                    continue
+                if (nx, ny) in closed_set:
                     continue
 
-                # Euclidean distance on grid
-                dist = np.sqrt((neighbor[0]-current[0])**2 + (neighbor[1]-current[1])**2)
-                move_cost = dist * self.grid_resolution
-                
+                neighbor = (nx, ny)
                 tentative_g = g_score[current] + move_cost
-                
+
                 if neighbor not in g_score or tentative_g < g_score[neighbor]:
                     came_from[neighbor] = current
                     g_score[neighbor] = tentative_g
                     
+                    # Heuristic optimization
                     h = self.heuristic(neighbor, goal_grid) * self.grid_resolution
-                    f_score[neighbor] = tentative_g + self.heuristic_weight * h
+                    f = tentative_g + w * h
                     
                     counter += 1
-                    heapq.heappush(open_set, (f_score[neighbor], counter, neighbor))
+                    heapq.heappush(open_set, (f, counter, neighbor))
         
         self.planning_time = time.time() - start_time
         print(f"A*: No path found after {self.iterations} iterations!")
@@ -106,7 +133,6 @@ class AStarPlanner(BasePlanner):
         x, y = node
         neighbors = []
 
-        # 8-connectivity
         for dx in [-1, 0, 1]:
             for dy in [-1, 0, 1]:
                 if dx == 0 and dy == 0:
@@ -114,11 +140,9 @@ class AStarPlanner(BasePlanner):
                 
                 nx, ny = x + dx, y + dy
 
-                # Check bounds
                 if not (0 <= nx < self.grid_width and 0 <= ny < self.grid_height):
                     continue
 
-                # Check collision
                 world_x, world_y = self.grid_to_world(nx, ny)
                 if self.is_valid_position(world_x, world_y):
                     neighbors.append((nx, ny))
@@ -157,29 +181,55 @@ class AStarPlanner(BasePlanner):
         if len(path.points) <= 2:
             return path
         
-        smoothed = [path.points[0]]
+        path_points = path.points
+        grid_points = [self.world_to_grid(p.x, p.y) for p in path_points]
+        
+        smoothed_points = [path_points[0]]
         current_idx = 0
         
-        while current_idx < len(path.points) - 1:
+        while current_idx < len(path_points) - 1:
             furthest_idx = current_idx + 1
-            
-            for i in range(len(path.points) - 1, current_idx, -1):
-                p1 = path.points[current_idx].to_tuple()
-                p2 = path.points[i].to_tuple()
-                
-                dist = np.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)
-                
-                step_size = 0.2
-                num_samples = int(max(5, dist / step_size))
-                
-                if self.is_path_valid(p1, p2, num_samples=num_samples):
+            for i in range(len(path_points) - 1, current_idx, -1):
+                if self._check_line_of_sight_grid(grid_points[current_idx], grid_points[i]):
                     furthest_idx = i
                     break
             
+            smoothed_points.append(path_points[furthest_idx])
             current_idx = furthest_idx
-            smoothed.append(path.points[current_idx])
         
-        return Path(smoothed)
+        return Path(smoothed_points)
+
+    def _check_line_of_sight_grid(self, p1: Tuple[int, int], p2: Tuple[int, int]) -> bool:
+        x0, y0 = p1
+        x1, y1 = p2
+        
+        dx = abs(x1 - x0)
+        dy = abs(y1 - y0)
+        
+        x = x0
+        y = y0
+        
+        sx = 1 if x0 < x1 else -1
+        sy = 1 if y0 < y1 else -1
+        
+        err = dx - dy
+        
+        while True:
+            if not (0 <= x < self.grid_width and 0 <= y < self.grid_height):
+                return False
+            if not self.occupancy_grid[x, y]: 
+                return False
+                
+            if x == x1 and y == y1:
+                break
+            e2 = 2 * err
+            if e2 > -dy:
+                err -= dy
+                x += sx
+            if e2 < dx:
+                err += dx
+                y += sy
+        return True
     
     def _resample_path(self, path: Path) -> Path:
         if not path.points or len(path.points) < 2:

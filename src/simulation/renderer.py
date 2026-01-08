@@ -73,7 +73,7 @@ class Renderer:
         self.show_sensors = True
 
         self.trajectory : List[Tuple[float, float]] = []
-        self.max_trajectory_length = 500
+        self.max_trajectory_length = 1000
 
         self.offset_x = 0
         self.offset_y = 0
