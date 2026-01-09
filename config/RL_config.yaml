@@ -1,10 +1,10 @@
 training:
-  algorithm: "ppo"       # "ppo" or "sac"
-  timesteps: 100000
+  algorithm: "ppo"                    # "ppo" or "sac"
+  timesteps: 100000                   # timesteps for training
   save_dir: "trained_models"
   log_dir: "logs"
   save_freq: 10000
-  device: "auto"         # "cuda" or "cpu"
+  device: "cpu"                       # "cuda" or "cpu"
   eval_episodes: 10
 
 simulation:
@@ -19,7 +19,7 @@ vehicle:
   max_velocity: 5.0
   max_acceleration: 3.0
   max_deceleration: -5.0
-  max_steering_angle: 0.6 # ~34 degrees
+  max_steering_angle: 0.6
 
 environment:
   max_steps: 1000
@@ -39,55 +39,6 @@ model:
   tau: 0.005
 
 map:
-  width: 100
-  height: 100
-  safety_margin: 1.0
-  start: [10.0, 10.0]
-  goal: [90.0, 90.0]
-  
-  train_map_json: 'maps/yaml' # SET JSON WILL IGNORE TEMPLATE BELOW
-  # TEMPLATE FOR TRAINING: "easy", "medium", "hard", "maze". if 'custom', use obstacles below
-  train_template: "custom" 
-  
-  train_obstacles:
-    - {type: rectangle, x: 15.0, y: 25.0, width: 30.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 25.0, y: 15.0, width: 10.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 55.0, y: 5.0, width: 30.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 55.0, y: 15.0, width: 10.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 75.0, y: 30.0, width: 10.0, height: 20.0, angle: 0.0}
-    - {type: rectangle, x: 95.0, y: 5.0, width: 10.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 95.0, y: 40.0, width: 10.0, height: 40.0, angle: 0.0}
-    - {type: rectangle, x: 50.0, y: 35.0, width: 40.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 55.0, y: 55.0, width: 70.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 15.0, y: 50.0, width: 10.0, height: 20.0, angle: 0.0}
-    - {type: rectangle, x: 5.0, y: 75.0, width: 10.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 35.0, y: 65.0, width: 10.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 55.0, y: 75.0, width: 10.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 75.0, y: 75.0, width: 10.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 55.0, y: 95.0, width: 10.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 30.0, y: 85.0, width: 20.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 75.0, y: 85.0, width: 10.0, height: 10.0, angle: 0.0}
+  train_map_yaml_folder: 'maps/yaml'
 
-
-  # TEMPLATE FOR EVALUATE: "easy", "medium", "hard", "maze". if 'custom', use obstacles below
-  map_json: 'maps/generated_map.yaml' # SET JSON WILL IGNORE TEMPLATE BELOW
-  eval_template: "custom"
-  
-  eval_obstacles:
-    - {type: rectangle, x: 15.0, y: 25.0, width: 30.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 25.0, y: 15.0, width: 10.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 55.0, y: 5.0, width: 30.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 55.0, y: 15.0, width: 10.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 75.0, y: 30.0, width: 10.0, height: 20.0, angle: 0.0}
-    - {type: rectangle, x: 95.0, y: 5.0, width: 10.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 95.0, y: 40.0, width: 10.0, height: 40.0, angle: 0.0}
-    - {type: rectangle, x: 50.0, y: 35.0, width: 40.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 55.0, y: 55.0, width: 70.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 15.0, y: 50.0, width: 10.0, height: 20.0, angle: 0.0}
-    - {type: rectangle, x: 5.0, y: 75.0, width: 10.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 35.0, y: 65.0, width: 10.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 55.0, y: 75.0, width: 10.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 75.0, y: 75.0, width: 10.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 55.0, y: 95.0, width: 10.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 30.0, y: 85.0, width: 20.0, height: 10.0, angle: 0.0}
-    - {type: rectangle, x: 75.0, y: 85.0, width: 10.0, height: 10.0, angle: 0.0}
+  evaluate_map_yaml_file: 'maps/generated_map.yaml'

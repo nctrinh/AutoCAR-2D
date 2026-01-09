@@ -89,18 +89,18 @@ def main():
 
     try:
         config = ConfigLoader(args.config)
-        train_cfg = config.get_section("training", {})
-        env_cfg = config.get_section("environment", {})
-        map_cfg = config.get_section("map", {})
+        train_cfg = config.get("training", {})
+        env_cfg = config.get("environment", {})
+        map_cfg = config.get("map", {})
         
         algo = train_cfg.get("algorithm", "ppo").lower()
         save_dir = Path(train_cfg.get("save_dir", "trained_models")) / algo
         save_dir.mkdir(parents=True, exist_ok=True)
         
-        map_folder_path = map_cfg.get("train_map_json")
+        map_folder_path = map_cfg.get("train_map_yaml_folder")
         
         if not map_folder_path:
-            print("Error: 'train_map_json' not defined in map section of config.")
+            print("Error: 'train_map_yaml_folder' not defined in map section of config.")
             return 1
 
         map_files = sorted(glob.glob(os.path.join(map_folder_path, "*.yaml")))
@@ -119,7 +119,7 @@ def main():
             print(f"STARTING PHASE {i+1}/{len(map_files)}: Map {Path(map_file).name}")
             print("-"*30)
             
-            current_map = load_map_from_yaml_file(Path(map_file))
+            current_map = Map2D.load_from_yaml(map_file)
             
             env = AutonomousCarEnv(
                 map_env=current_map,
@@ -131,7 +131,7 @@ def main():
             
             if model is None:
                 print("Initializing new model...")
-                model = create_model(vec_env, train_cfg, config.get_section("model"), algo)
+                model = create_model(vec_env, train_cfg, config.get("model"), algo)
             else:
                 print("Loading existing model into new map environment...")
                 model.set_env(vec_env)
