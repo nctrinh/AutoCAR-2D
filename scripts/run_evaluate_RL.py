@@ -3,8 +3,7 @@ import argparse
 from pathlib import Path
 import numpy as np
 import time
-import pygame  # Cần import pygame để xử lý sự kiện cửa sổ
-from typing import Optional
+import pygame
 import warnings
 
 warnings.filterwarnings("ignore", category=UserWarning, module="pygame.pkgdata")
@@ -15,60 +14,27 @@ from src.core.vehicle import Vehicle
 from src.learning.environment import AutonomousCarEnv
 from src.core.map import Map2D, CircleObstacle, RectangleObstacle, PolygonObstacle
 from src.utils.config_loader import ConfigLoader
-# Import Renderer từ module simulation
 from src.simulation.renderer import Renderer 
 
-def load_map(map_name: Optional[str], config: ConfigLoader) -> Map2D:
+def load_map(config: ConfigLoader) -> Map2D:
     """Load map environment từ config."""
     map_params = config.get_map_params()
 
-    if map_params.get("map_json") != '':
-        map_env = Map2D.load_from_yaml(map_params.get("map_json"))
+    if map_params.get("evaluate_map_yaml_file") != '':
+        map_env = Map2D.load_from_yaml(map_params.get("evaluate_map_yaml_file"))
         return map_env
     else:
-        world_width = map_params.get("width", 100)
-        world_height = map_params.get("height", 100)
-        safety_margin = map_params.get("safety_margin", 1.0)
+        map_env = Map2D(100, 100, 4.0)
 
-        map_env = Map2D(world_width, world_height, safety_margin)
-
-        start = map_params.get("start", [10, 10])
-        goal = map_params.get("goal", [90, 90])
+        start = [10, 10]
+        goal = [90, 90]
         map_env.set_start(start[0], start[1])
         map_env.set_goal(goal[0], goal[1])
 
-        # --- Load Template Maps ---
-        if map_name == 'easy':
-            map_env.add_obstacle(CircleObstacle(x=30, y=30, radius=8))
-            map_env.add_obstacle(CircleObstacle(x=70, y=70, radius=8))
-        elif map_name == 'medium':
-            map_env.add_obstacle(CircleObstacle(x=30, y=30, radius=8))
-            map_env.add_obstacle(RectangleObstacle(x=60, y=50, width=15, height=30))
-            map_env.add_obstacle(CircleObstacle(x=70, y=20, radius=6))
-            map_env.add_obstacle(CircleObstacle(x=60, y=75, radius=7))
-        elif map_name == 'hard':
-            for _ in range(20):
-                map_env.add_obstacle(CircleObstacle(
-                    np.random.uniform(0, map_env.width), 
-                    np.random.uniform(0, map_env.height), 
-                    np.random.uniform(1, 4)
-                ))
-        elif map_name == 'maze':
-            map_env.add_obstacle(RectangleObstacle(x=25, y=20, width=10, height=40))
-            map_env.add_obstacle(RectangleObstacle(x=50, y=40, width=10, height=40))
-            map_env.add_obstacle(RectangleObstacle(x=75, y=20, width=10, height=40))
-            map_env.add_obstacle(CircleObstacle(x=40, y=65, radius=8))
-        elif map_name == 'custom' or map_name is None:
-            # Load obstacles from YAML if map_name is custom or None
-            obstacles_cfg = map_params.get("eval_obstacles", [])
-            for obs_cfg in obstacles_cfg:
-                obs_type = obs_cfg.get("type")
-                if obs_type == "circle":
-                    map_env.add_obstacle(CircleObstacle(obs_cfg["x"], obs_cfg["y"], obs_cfg["radius"]))
-                elif obs_type == "rectangle":
-                    map_env.add_obstacle(RectangleObstacle(obs_cfg["x"], obs_cfg["y"], obs_cfg["width"], obs_cfg["height"], obs_cfg.get("angle", 0.0)))
-                elif obs_type == "polygon":
-                    map_env.add_obstacle(PolygonObstacle(np.array(obs_cfg["vertices"])))
+        map_env.add_obstacle(RectangleObstacle(x=25, y=20, width=10, height=40))
+        map_env.add_obstacle(RectangleObstacle(x=50, y=40, width=10, height=40))
+        map_env.add_obstacle(RectangleObstacle(x=75, y=20, width=10, height=40))
+        map_env.add_obstacle(CircleObstacle(x=40, y=65, radius=8))
 
         return map_env
 
@@ -230,7 +196,6 @@ def main():
     parser.add_argument('--model', type=str, default='trained_models/ppo/ppo_final.zip', help='Path to trained model')
     parser.add_argument('--config', type=str, default='config/RL_config.yaml', help='Config path')
     parser.add_argument('--algorithm', type=str, default='ppo', choices=['ppo', 'sac'])
-    parser.add_argument('--map', type=str, default=None, choices=['easy', 'medium', 'hard', 'maze', 'custom'])
     parser.add_argument('--episodes', type=int, default=10, help='Number of evaluation episodes')
     parser.add_argument('--visualize', action='store_true', help='Visualize with Renderer')
     
@@ -246,14 +211,10 @@ def main():
             print(f"Error: Model not found at {args.model}")
             return 1
         
-        # Setup Map & Env
-        map_name = args.map if args.map else config.get_map_params().get("eval_template", "custom")
-        print(f"Loading map: {map_name}")
-        map_env = load_map(map_name, config)
+        map_env = load_map(config)
         
         vehicle = Vehicle(config.get_vehicle_config())
         
-        # Lưu ý: render_mode ở đây set là None, vì ta sẽ tự render bằng visualize_episode_with_renderer
         env = AutonomousCarEnv(
             map_env=map_env,
             vehicle=vehicle,
@@ -262,7 +223,6 @@ def main():
             render_mode=None 
         )
         
-        # Load Model
         print(f"Loading model: {args.model}")
         if args.algorithm == 'ppo':
             from stable_baselines3 import PPO
@@ -271,7 +231,6 @@ def main():
             from stable_baselines3 import SAC
             model = SAC.load(args.model)
             
-        # Run
         if args.visualize:
             visualize_episode_with_renderer(model, env, config)
         else:

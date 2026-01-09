@@ -13,17 +13,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from src.learning.environment import AutonomousCarEnv
 from src.core.map import Map2D, CircleObstacle, RectangleObstacle, PolygonObstacle
-
-class ConfigLoader:
-    def __init__(self, path):
-        with open(path, 'r') as f:
-            self.cfg = yaml.safe_load(f)
-            
-    def get(self, section, key, default=None):
-        return self.cfg.get(section, {}).get(key, default)
-        
-    def get_section(self, section):
-        return self.cfg.get(section, {})
+from src.utils.config_loader import ConfigLoader
 
 def load_map_from_yaml_file(yaml_path: Path) -> Map2D:
     print(f"Loading map from: {yaml_path}")
@@ -70,7 +60,7 @@ def create_model(vec_env, train_cfg, model_cfg, algo):
             ent_coef=model_cfg.get("ent_coef", 0.01),
             verbose=1,
             tensorboard_log=str(Path(train_cfg.get("log_dir", "logs"))),
-            device=train_cfg.get("device", "auto")
+            device=train_cfg.get("device", "cpu")
         )
     elif algo == 'sac':
         return SAC(
@@ -83,7 +73,7 @@ def create_model(vec_env, train_cfg, model_cfg, algo):
             tau=model_cfg.get("tau", 0.005),
             verbose=1,
             tensorboard_log=str(Path(train_cfg.get("log_dir", "logs"))),
-            device=train_cfg.get("device", "auto")
+            device=train_cfg.get("device", "cpu")
         )
     else:
         raise ValueError(f"Unknown algorithm: {algo}")
@@ -99,15 +89,15 @@ def main():
 
     try:
         config = ConfigLoader(args.config)
-        train_cfg = config.get_section("training")
-        env_cfg = config.get_section("environment")
-        map_main_cfg = config.get_section("map")
+        train_cfg = config.get_section("training", {})
+        env_cfg = config.get_section("environment", {})
+        map_cfg = config.get_section("map", {})
         
         algo = train_cfg.get("algorithm", "ppo").lower()
         save_dir = Path(train_cfg.get("save_dir", "trained_models")) / algo
         save_dir.mkdir(parents=True, exist_ok=True)
         
-        map_folder_path = map_main_cfg.get("train_map_json")
+        map_folder_path = map_cfg.get("train_map_json")
         
         if not map_folder_path:
             print("Error: 'train_map_json' not defined in map section of config.")
