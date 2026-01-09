@@ -11,6 +11,56 @@ A 2D autonomous vehicle simulation project that implements various planning, con
 - **Simulation**: Real-time 2D visualization using Pygame and Matplotlib
 - **Configuration**: YAML-based configuration system for easy parameter tuning
 
+## Planning & Control Demos
+
+Demonstration of **Path Planning** algorithms (Rows) combined with **Path Tracking** controllers (Columns).
+
+<table>
+  <tr>
+    <th align="center">Algorithm \ Controller</th>
+    <th align="center">PID</th>
+    <th align="center">Pure Pursuit</th>
+    <th align="center">Adaptive Pure Pursuit</th>
+  </tr>
+  <tr>
+    <td align="center"><b>A*</b></td>
+    <td><img src="gif/astar_pid.gif" width="100%" alt="A* + PID"/></td>
+    <td><img src="gif/astar_pure_pursuit.gif" width="100%" alt="A* + Pure Pursuit"/></td>
+    <td><img src="gif/astar_adaptive_pure_pursuit.gif" width="100%" alt="A* + Adaptive PP"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>RRT</b></td>
+    <td><img src="gif/rrt_pid.gif" width="100%" alt="RRT + PID"/></td>
+    <td><img src="gif/rrt_pure_pursuit.gif" width="100%" alt="RRT + Pure Pursuit"/></td>
+    <td><img src="gif/rrt_adaptive_pure_pursuit.gif" width="100%" alt="RRT + Adaptive PP"/></td>
+  </tr>
+</table>
+
+## Reinforcement Learning Demos
+
+Comparison of RL agents (**PPO** vs **SAC**) trained and evaluated on different map difficulties/scenarios.
+
+<table>
+  <tr>
+    <th align="center">Model \ Map</th>
+    <th align="center">Map 1 </th>
+    <th align="center">Map 2 </th>
+    <th align="center">Map 3 </th>
+  </tr>
+  <tr>
+    <td align="center"><b>PPO</b></td>
+    <td><img src="gif/ppo_map1.gif" width="100%" alt="PPO Map 1"/></td>
+    <td><img src="gif/ppo_map2.gif" width="100%" alt="PPO Map 2"/></td>
+    <td><img src="gif/ppo_map3.gif" width="100%" alt="PPO Map 3"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>SAC</b></td>
+    <td><img src="gif/sac_map1.gif" width="100%" alt="SAC Map 1"/></td>
+    <td><img src="gif/sac_map2.gif" width="100%" alt="SAC Map 2"/></td>
+    <td><img src="gif/sac_map3.gif" width="100%" alt="SAC Map 3"/></td>
+  </tr>
+</table>
+
 ## Installation
 
 ### Prerequisites
@@ -20,8 +70,8 @@ A 2D autonomous vehicle simulation project that implements various planning, con
 ### Setup
 1. Clone the repository:
    ```bash
-   git clone <repository-url>
-   cd autonomous_car_2d
+   git clone https://github.com/nctrinh/AutoCAR-2D.git
+   cd AutoCAR-2D
    ```
 
 2. Install dependencies using Poetry:
@@ -36,65 +86,78 @@ A 2D autonomous vehicle simulation project that implements various planning, con
 
 ## Usage
 
-### Running Scripts
+### Quick Start
 
-All executable scripts are located in the `scripts/` directory. Below are the available scripts and how to run them:
+All executable scripts are located in the `scripts/` directory. Here are the most common commands:
 
-#### Training Reinforcement Learning Models
-- **run_train_RL.py**: Train PPO or SAC models for autonomous driving
-  ```bash
-  python scripts/run_train_RL.py --config config/RL_config.yaml --algorithm PPO --timesteps 100000
-  ```
-  Options:
-  - `--config`: Path to configuration file (default: config/RL_config.yaml)
-  - `--algorithm`: RL algorithm to use (PPO or SAC)
-  - `--timesteps`: Number of training timesteps
+#### 1. Running 2D Simulation
 
-#### Running 2D Simulation
-- **run_sim2d.py**: Run the 2D autonomous car simulation
-  ```bash
-  python scripts/run_sim2d.py --config config/default_config.yaml --max-steps 1000 --fps 30
-  ```
-  Options:
-  - `--config`: Path to configuration file (default: config/default_config.yaml)
-  - `--max-steps`: Maximum simulation steps
-  - `--fps`: Target frames per second
+Run a quick 2D simulation with default configuration:
 
-- **run_sim2d.sh**: Shell script wrapper for running the simulation
-  ```bash
-  ./scripts/run_sim2d.sh
-  ```
+```bash
+# Using Python directly
+python scripts/run_sim2d.py --config config/default_config.yaml --max-steps 1000 --fps 30
 
-#### Evaluating Trained Models
-- **run_evaluate_RL.py**: Evaluate trained RL models
-  ```bash
-  python scripts/run_evaluate_RL.py --model trained_models/ppo/best_model.zip --episodes 10
-  ```
-  Options:
-  - `--model`: Path to trained model file
-  - `--episodes`: Number of evaluation episodes
+# Or using the shell script
+./scripts/run_sim2d.sh
+```
 
-#### Testing Core Components
-- **test_core_components.py**: Test vehicle and map core components
-  ```bash
-  python scripts/test_core_components.py
-  ```
+**Options:**
+- `--config`: Path to configuration file (default: `config/default_config.yaml`)
+- `--max-steps`: Maximum simulation steps (default: 1000)
+- `--fps`: Target frames per second (default: 30)
 
-- **test_core_components.sh**: Shell script wrapper for testing core components
-  ```bash
-  ./scripts/test_core_components.sh
-  ```
+#### 2. Training Reinforcement Learning Models
 
-#### Testing Planning and Control
-- **test_core_planning_control.py**: Test planning algorithms (A*, RRT) and control systems (PID, Pure Pursuit)
-  ```bash
-  python scripts/test_core_planning_control.py
-  ```
+Train a PPO or SAC model for autonomous driving:
 
-- **test_core_planning_control.sh**: Shell script wrapper for testing planning and control
-  ```bash
-  ./scripts/test_core_planning_control.sh
-  ```
+```bash
+# Train PPO model
+python scripts/run_train_RL.py --config config/RL_config.yaml --algorithm PPO --timesteps 100000
+
+# Train SAC model
+python scripts/run_train_RL.py --config config/RL_config.yaml --algorithm SAC --timesteps 100000
+
+# Using the shell script (uses default config)
+./scripts/run_train_RL.sh
+```
+
+**Options:**
+- `--config`: Path to configuration file (default: `config/RL_config.yaml`)
+- `--algorithm`: RL algorithm to use (`PPO` or `SAC`)
+- `--timesteps`: Number of training timesteps (default: 100000)
+
+**Note:** Training logs are saved to `logs/` directory and can be viewed with TensorBoard:
+```bash
+tensorboard --logdir logs/
+```
+
+#### 3. Evaluating Trained Models
+
+Evaluate a trained RL model:
+
+```bash
+# Ensure the model path is correct before executing the script.
+
+# Evaluate PPO model
+python scripts/run_evaluate_RL.py --model trained_models/ppo/best_model.zip --episodes 10
+# or with visualizaion
+python scripts/run_evaluate_RL.py --model trained_models/ppo/best_model.zip --visualize
+
+# Evaluate SAC model
+python scripts/run_evaluate_RL.py --model trained_models/sac/best_model.zip --episodes 10
+# or with visualizaion
+python scripts/run_evaluate_RL.py --model trained_models/sac/best_model.zip --visualize
+
+# Using the shell script
+./scripts/run_evaluate_RL.sh
+```
+
+**Options:**
+- `--model`: Path to trained model file
+- `--episodes`: Number of evaluation episodes (default: 10)
+- `--visualize`: Using renderer to visualize
+
 
 ## Project Structure
 
@@ -104,6 +167,7 @@ autonomous_car_2d/
 │   ├── default_config.yaml
 │   └── RL_config.yaml
 ├── docs/                   # Documentation
+├── gif/                    # GIF demonstrations
 ├── logs/                   # Training logs and TensorBoard events
 ├── maps/                   # Sample map files
 ├── notebooks/              # Jupyter notebooks for analysis
