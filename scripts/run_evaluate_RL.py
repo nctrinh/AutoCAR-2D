@@ -42,7 +42,7 @@ class FogOfWarDriver:
         if not self.current_path_points:
             need_replan = True
         elif self._is_path_blocked():
-             need_replan = True
+            need_replan = True
              
         if need_replan:
             self._replan(vehicle_pos)
@@ -74,7 +74,7 @@ class FogOfWarDriver:
 
     def _is_new_obstacle(self, x, y):
         for (cx, cy) in self.detected_obstacles_cache:
-            if np.hypot(cx - x, cy - y) < 1.2:
+            if np.hypot(cx - x, cy - y) < self.env.map_env.safety_margin:
                 return False
         return True
 
@@ -161,7 +161,7 @@ def evaluate_episode(model, env: AutonomousCarEnv, render: bool = False, determi
         _, obs = env._get_observation()
         
         action, _ = model.predict(obs, deterministic=deterministic)
-        obs, reward, terminated, truncated, info = env.step(action)
+        obs, lidar_data, reward, terminated, truncated, info = env.step(action)
         
         episode_reward += reward
         steps += 1
@@ -216,9 +216,7 @@ def visualize_episode_with_renderer(model, env: AutonomousCarEnv, config: Config
     
     obs, info = env.reset()
     driver.update()
-    
-    _, obs = env._get_observation()
-    
+        
     done = False
     episode_reward = 0
     steps = 0
@@ -233,6 +231,7 @@ def visualize_episode_with_renderer(model, env: AutonomousCarEnv, config: Config
     renderer.trajectory = [] 
     
     running = True
+    lidar_data, obs = env._get_observation()
     while running:
         # --- Event Handling ---
         for event in pygame.event.get():
@@ -248,9 +247,7 @@ def visualize_episode_with_renderer(model, env: AutonomousCarEnv, config: Config
                 elif event.key == pygame.K_p: show_path = not show_path # Toggle vẽ đường A*
 
         if not running: break
-
         if not paused and not done:
-            lidar_data, obs = env._get_observation()
             # DRIVER UPDATE (Sense -> Map -> Plan)
             driver.update(lidar_data)
             
@@ -261,15 +258,11 @@ def visualize_episode_with_renderer(model, env: AutonomousCarEnv, config: Config
             action, _ = model.predict(obs, deterministic=True)
             
             # 4. STEP
-            obs, reward, terminated, truncated, info = env.step(action)
+            obs, lidar_data, reward, terminated, _, _ = env.step(action)
             
             episode_reward += reward
             steps += 1
-            vehicle_corners = env.vehicle.get_corners()
-            if (env.map_env.is_collision(vehicle_corners[0][0], vehicle_corners[0][1]) 
-                or env.map_env.is_collision(vehicle_corners[1][0], vehicle_corners[1][1])
-                or env.map_env.is_collision(vehicle_corners[2][0], vehicle_corners[2][1])
-                or env.map_env.is_collision(vehicle_corners[3][0], vehicle_corners[3][1])):
+            if terminated:
                 print(f"\nCRASH! Vehicle collided at step {steps}. Reward: {episode_reward:.2f}")
                 done = True
             # CHECK REAL GOAL
@@ -325,11 +318,8 @@ def visualize_episode_with_renderer(model, env: AutonomousCarEnv, config: Config
             renderer.draw_vehicle(env.vehicle)
         
         additional_info = {
-            'Reward': f"{episode_reward:.1f}",
             'Steps': steps,
-            'Action': f"[{action[0]:.2f}, {action[1]:.2f}]",
-            'Real Dist': f"{dist_to_final:.2f}m",
-            'Mode': "Hybrid (A* + RL)"
+            'Real Dist': f"{dist_to_final:.2f}m"
         }
         renderer.draw_info_panel(env.vehicle, steps, clock.get_fps(), additional_info)
         

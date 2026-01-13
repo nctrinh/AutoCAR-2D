@@ -81,6 +81,8 @@ class AutonomousCarEnv(gym.Env):
             shape=(obs_dim,),
             dtype=np.float32
         )
+        self.lidar_data = None
+        self.observation = None
 
         self.renderer = None
     
@@ -172,7 +174,6 @@ class AutonomousCarEnv(gym.Env):
             distance_to_goal = self.vehicle.distance_to(*self.map_env.goal)
             if distance_to_goal < 3.0:
                 is_goal_reached = True
-                terminated = True
 
         # Calculate reward
         reward = self._calculate_reward(action, lidar_data, is_collision, is_goal_reached)
@@ -187,8 +188,10 @@ class AutonomousCarEnv(gym.Env):
         self.prev_action = action
         
         info = self._get_info()
+        self.lidar_data = lidar_data
+        self.observation = observation
         
-        return observation, reward, terminated, truncated, info
+        return observation, lidar_data, reward, terminated, truncated, info
     
     def _get_observation(self) -> np.ndarray:
         """
@@ -239,7 +242,8 @@ class AutonomousCarEnv(gym.Env):
         lidar_data = self._get_lidar_readings()
         
         observation = np.concatenate([vehicle_state, goal_info, lidar_data])
-        
+        self.lidar_data = lidar_data
+        self.observation = observation
         return lidar_data, observation
 
     def _get_lidar_readings(self) -> np.ndarray:

@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "autonomous-car-2d"
+name = "AutoCAR-2D"
 version = "0.1.0"
 description = ""
 authors = ["nctrinh <nctrinh2705@gmail.com>"]

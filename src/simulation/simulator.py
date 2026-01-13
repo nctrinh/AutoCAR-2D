@@ -278,9 +278,7 @@ class Simulator:
             print("Planning failed!")
             self.state = SimulationState.FAILED
             return False
-        
-        print(f"Path found! Length: {self.path.length:.2f}m")
-        
+                
         # Set path to controller
         if self.controller is not None:
             self.controller.set_path(self.path)
