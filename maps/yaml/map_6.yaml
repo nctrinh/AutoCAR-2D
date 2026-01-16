@@ -6,18 +6,31 @@ map:
   goal: [90.0, 90.0]
   templates: custom
   obstacles:
-  - {type: rectangle, x: 22.5, y: 45.0, width: 5.0, height: 90.0, angle: 0.0}
-  - {type: rectangle, x: 37.5, y: 55.0, width: 5.0, height: 90.0, angle: 0.0}
-  - {type: rectangle, x: 62.5, y: 12.5, width: 45.0, height: 5.0, angle: 0.0}
-  - {type: rectangle, x: 97.5, y: 12.5, width: 5.0, height: 5.0, angle: 0.0}
-  - {type: rectangle, x: 75.0, y: 27.5, width: 50.0, height: 5.0, angle: 0.0}
-  - {type: rectangle, x: 62.5, y: 42.5, width: 45.0, height: 5.0, angle: 0.0}
-  - {type: rectangle, x: 97.5, y: 42.5, width: 5.0, height: 5.0, angle: 0.0}
-  - {type: rectangle, x: 75.0, y: 57.5, width: 50.0, height: 5.0, angle: 0.0}
-  - {type: rectangle, x: 52.5, y: 75.0, width: 5.0, height: 30.0, angle: 0.0}
-  - {type: rectangle, x: 67.5, y: 85.0, width: 5.0, height: 30.0, angle: 0.0}
-  - {type: rectangle, x: 75.0, y: 72.5, width: 10.0, height: 5.0, angle: 0.0}
-  - {type: rectangle, x: 97.5, y: 72.5, width: 5.0, height: 5.0, angle: 0.0}
-  - {type: rectangle, x: 95.0, y: 82.5, width: 10.0, height: 5.0, angle: 0.0}
-  - {type: rectangle, x: 75.0, y: 92.5, width: 10.0, height: 5.0, angle: 0.0}
-  - {type: rectangle, x: 72.5, y: 82.5, width: 5.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 22.5, y: 22.5, width: 45.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 77.5, y: 22.5, width: 45.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 22.5, y: 17.5, width: 5.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 42.5, y: 5.0, width: 5.0, height: 10.0, angle: 0.0}
+  - {type: rectangle, x: 57.5, y: 32.5, width: 5.0, height: 15.0, angle: 0.0}
+  - {type: rectangle, x: 37.5, y: 37.5, width: 35.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 5.0, y: 62.5, width: 10.0, height: 75.0, angle: 0.0}
+  - {type: rectangle, x: 15.0, y: 52.5, width: 10.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 32.5, y: 55.0, width: 5.0, height: 30.0, angle: 0.0}
+  - {type: rectangle, x: 25.0, y: 67.5, width: 10.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 22.5, y: 75.0, width: 5.0, height: 10.0, angle: 0.0}
+  - {type: rectangle, x: 30.0, y: 92.5, width: 40.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 37.5, y: 85.0, width: 5.0, height: 10.0, angle: 0.0}
+  - {type: rectangle, x: 45.0, y: 82.5, width: 10.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 47.5, y: 70.0, width: 5.0, height: 20.0, angle: 0.0}
+  - {type: rectangle, x: 47.5, y: 45.0, width: 5.0, height: 10.0, angle: 0.0}
+  - {type: rectangle, x: 57.5, y: 47.5, width: 15.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 62.5, y: 62.5, width: 25.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 67.5, y: 40.0, width: 5.0, height: 20.0, angle: 0.0}
+  - {type: rectangle, x: 80.0, y: 32.5, width: 20.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 87.5, y: 55.0, width: 5.0, height: 20.0, angle: 0.0}
+  - {type: rectangle, x: 77.5, y: 72.5, width: 5.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 97.5, y: 87.5, width: 5.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 92.5, y: 82.5, width: 5.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 82.5, y: 87.5, width: 5.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 72.5, y: 87.5, width: 5.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 62.5, y: 82.5, width: 5.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 57.5, y: 97.5, width: 5.0, height: 5.0, angle: 0.0}

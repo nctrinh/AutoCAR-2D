@@ -17,7 +17,7 @@ planner:
   algorithm: astar
 
   astar:
-    max_iterations: 30000
+    max_iterations: 300000
     grid_resolution: 0.5
     heuristic_weight: 1.5
     spacing: 1.0
@@ -96,4 +96,4 @@ visualization:
   goal_color: [0, 255, 0]
 
 map:
-  sim_map_yaml_file: 'maps/generated_map.yaml'
+  sim_map_yaml_file: 'maps/yaml/map_3.yaml'

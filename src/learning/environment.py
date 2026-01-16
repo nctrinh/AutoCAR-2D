@@ -81,8 +81,9 @@ class AutonomousCarEnv(gym.Env):
             shape=(obs_dim,),
             dtype=np.float32
         )
-        self.lidar_data = None
-        self.observation = None
+
+        self._lidar_cache = None
+        self._lidar_cache_position = None
 
         self.renderer = None
     
@@ -124,6 +125,9 @@ class AutonomousCarEnv(gym.Env):
         self.steps = 0
         self.total_reward = 0.0
         self.prev_action = np.array([0.0, 0.0])
+
+        self._lidar_cache = None
+        self._lidar_cache_position = None
         
         if self.map_env.goal:
             self.prev_distance_to_goal = self.vehicle.distance_to(*self.map_env.goal)
@@ -162,12 +166,10 @@ class AutonomousCarEnv(gym.Env):
         is_goal_reached = False
 
         vehicle_corners = self.vehicle.get_corners()
-        if (self.map_env.is_collision(vehicle_corners[0][0], vehicle_corners[0][1]) 
-            or self.map_env.is_collision(vehicle_corners[1][0], vehicle_corners[1][1])
-            or self.map_env.is_collision(vehicle_corners[2][0], vehicle_corners[2][1])
-            or self.map_env.is_collision(vehicle_corners[3][0], vehicle_corners[3][1])):
-            is_collision = True
-            terminated = True
+        for corner in vehicle_corners:
+            if self.map_env.is_collision(corner[0], corner[1], 0):
+                is_collision = True
+                terminated = True
         
         # Check về đích
         if self.map_env.goal:
@@ -188,10 +190,11 @@ class AutonomousCarEnv(gym.Env):
         self.prev_action = action
         
         info = self._get_info()
-        self.lidar_data = lidar_data
-        self.observation = observation
+
+        info = self._get_info()
+        info['lidar_data'] = lidar_data
         
-        return observation, lidar_data, reward, terminated, truncated, info
+        return observation, reward, terminated, truncated, info
     
     def _get_observation(self) -> np.ndarray:
         """
@@ -242,22 +245,26 @@ class AutonomousCarEnv(gym.Env):
         lidar_data = self._get_lidar_readings()
         
         observation = np.concatenate([vehicle_state, goal_info, lidar_data])
-        self.lidar_data = lidar_data
-        self.observation = observation
         return lidar_data, observation
 
     def _get_lidar_readings(self) -> np.ndarray:
         pos = self.vehicle.get_position()
         theta = self.vehicle.state.theta
+        if self._lidar_cache is not None:
+            cached_pos, cached_theta = self._lidar_cache_position
+            if (np.allclose(pos, cached_pos, atol=0.01) and 
+                np.isclose(theta, cached_theta, atol=0.01)):
+                return self._lidar_cache
         readings = np.ones(self.num_lidar_rays, dtype=np.float32)
         
         ray_angles = theta + np.linspace(0, 2*np.pi, self.num_lidar_rays, endpoint=False)
         
         step_size = 1.0 
         max_steps = int(self.lidar_range / step_size)
-        
+        cos_angles = np.cos(ray_angles)
+        sin_angles = np.sin(ray_angles)
         for i, angle in enumerate(ray_angles):
-            cos_a, sin_a = np.cos(angle), np.sin(angle)
+            cos_a, sin_a = cos_angles[i], sin_angles[i]
             for step in range(1, max_steps + 1):
                 dist = step * step_size
                 rx = pos[0] + dist * cos_a
@@ -266,7 +273,9 @@ class AutonomousCarEnv(gym.Env):
                 if self.map_env.is_collision(rx, ry, 0):
                     readings[i] = dist / self.lidar_range
                     break
-                    
+        self._lidar_cache = readings.copy()
+        pos_array = np.array(pos) if not isinstance(pos, np.ndarray) else pos
+        self._lidar_cache_position = (pos_array.copy(), theta)
         return readings
     
     def _calculate_reward(self, action: np.ndarray, lidar_data: np.ndarray, 

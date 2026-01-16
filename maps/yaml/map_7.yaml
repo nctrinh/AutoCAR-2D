@@ -6,6 +6,18 @@ map:
   goal: [90.0, 90.0]
   templates: custom
   obstacles:
-  - {type: rectangle, x: 82.5, y: 52.5, width: 5.0, height: 85.0, angle: 0.0}
-  - {type: rectangle, x: 90.0, y: 97.5, width: 20.0, height: 5.0, angle: 0.0}
-  - {type: rectangle, x: 97.5, y: 52.5, width: 5.0, height: 85.0, angle: 0.0}
+  - {type: rectangle, x: 22.5, y: 45.0, width: 5.0, height: 90.0, angle: 0.0}
+  - {type: rectangle, x: 37.5, y: 55.0, width: 5.0, height: 90.0, angle: 0.0}
+  - {type: rectangle, x: 62.5, y: 12.5, width: 45.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 97.5, y: 12.5, width: 5.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 75.0, y: 27.5, width: 50.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 62.5, y: 42.5, width: 45.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 97.5, y: 42.5, width: 5.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 75.0, y: 57.5, width: 50.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 52.5, y: 75.0, width: 5.0, height: 30.0, angle: 0.0}
+  - {type: rectangle, x: 67.5, y: 85.0, width: 5.0, height: 30.0, angle: 0.0}
+  - {type: rectangle, x: 75.0, y: 72.5, width: 10.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 97.5, y: 72.5, width: 5.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 95.0, y: 82.5, width: 10.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 75.0, y: 92.5, width: 10.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 72.5, y: 82.5, width: 5.0, height: 5.0, angle: 0.0}

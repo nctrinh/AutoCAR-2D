@@ -22,7 +22,7 @@ vehicle:
   max_steering_angle: 0.6
 
 environment:
-  max_steps: 1000
+  max_steps: 10000
   num_lidar_rays: 16
 
 model:
@@ -41,4 +41,4 @@ model:
 map:
   train_map_yaml_folder: 'maps/yaml'
 
-  evaluate_map_yaml_file: 'maps/generated_map.yaml'
+  evaluate_map_yaml_file: 'maps/yaml/map_1.yaml'

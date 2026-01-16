@@ -1,0 +1,11 @@
+map:
+  width: 100.0
+  height: 100.0
+  safety_margin: 4.0
+  start: [10.0, 10.0]
+  goal: [90.0, 90.0]
+  templates: custom
+  obstacles:
+  - {type: rectangle, x: 82.5, y: 52.5, width: 5.0, height: 85.0, angle: 0.0}
+  - {type: rectangle, x: 90.0, y: 97.5, width: 20.0, height: 5.0, angle: 0.0}
+  - {type: rectangle, x: 97.5, y: 52.5, width: 5.0, height: 85.0, angle: 0.0}

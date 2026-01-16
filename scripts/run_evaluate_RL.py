@@ -16,7 +16,7 @@ from src.core.map import Map2D, CircleObstacle, RectangleObstacle, PolygonObstac
 from src.utils.config_loader import ConfigLoader
 from src.simulation.renderer import Renderer 
 from src.planning.a_star import AStarPlanner
-from src.planning.base_planner import Path as PlannerPath
+from src.control.pid_controller import PIDController
 
 class FogOfWarDriver:
     def __init__(self, env: AutonomousCarEnv):
@@ -30,6 +30,8 @@ class FogOfWarDriver:
         
         self.current_path_points = []
         self.current_wp_idx = 0
+        self.replan_cooldown = 0
+        self.replan_interval = 1
         
         self.detected_obstacles_cache = [] 
 
@@ -37,15 +39,19 @@ class FogOfWarDriver:
         vehicle_pos = self.env.vehicle.get_position()
         
         self._update_map_from_lidar(lidar_data)
-        
+
+        self.replan_cooldown -= 1
         need_replan = False
         if not self.current_path_points:
             need_replan = True
-        elif self._is_path_blocked():
-            need_replan = True
-             
+        elif self.replan_cooldown <= 0:
+            if self._is_path_blocked():
+                need_replan = True
+            self.replan_cooldown = self.replan_interval
+        
         if need_replan:
             self._replan(vehicle_pos)
+            self.replan_cooldown = self.replan_interval
 
         self._update_env_goal_for_rl(vehicle_pos)
 
@@ -74,14 +80,14 @@ class FogOfWarDriver:
 
     def _is_new_obstacle(self, x, y):
         for (cx, cy) in self.detected_obstacles_cache:
-            if np.hypot(cx - x, cy - y) < self.env.map_env.safety_margin:
+            if np.hypot(cx - x, cy - y) < 2.0:
                 return False
         return True
 
     def _is_path_blocked(self):
         if not self.current_path_points: return True
         
-        check_range = min(len(self.current_path_points), self.current_wp_idx + 10)
+        check_range = min(len(self.current_path_points), self.current_wp_idx + 3)
         for i in range(self.current_wp_idx, check_range):
             p = self.current_path_points[i]
             if self.internal_map.is_collision(p.x, p.y):
@@ -89,7 +95,7 @@ class FogOfWarDriver:
         return False
 
     def _replan(self, start_pos):
-        planner = AStarPlanner(self.internal_map, grid_resolution=1.0, spacing=2.0)
+        planner = AStarPlanner(self.internal_map, grid_resolution=1.0)
         
         path_obj = planner.plan(start_pos, self.final_goal, info=False)
         
@@ -161,7 +167,8 @@ def evaluate_episode(model, env: AutonomousCarEnv, render: bool = False, determi
         _, obs = env._get_observation()
         
         action, _ = model.predict(obs, deterministic=deterministic)
-        obs, lidar_data, reward, terminated, truncated, info = env.step(action)
+        obs, reward, terminated, truncated, info = env.step(action)
+        lidar_data = info['lidar_data']
         
         episode_reward += reward
         steps += 1
@@ -223,6 +230,8 @@ def visualize_episode_with_renderer(model, env: AutonomousCarEnv, config: Config
     paused = False
     clock = pygame.time.Clock()
     target_fps = 60
+    render_every_n_frames = 1
+    frame_counter = 0
     
     # Visualization toggles
     show_path = True
@@ -232,6 +241,7 @@ def visualize_episode_with_renderer(model, env: AutonomousCarEnv, config: Config
     
     running = True
     lidar_data, obs = env._get_observation()
+    pid_controller = PIDController()
     while running:
         # --- Event Handling ---
         for event in pygame.event.get():
@@ -248,17 +258,19 @@ def visualize_episode_with_renderer(model, env: AutonomousCarEnv, config: Config
 
         if not running: break
         if not paused and not done:
-            # DRIVER UPDATE (Sense -> Map -> Plan)
-            driver.update(lidar_data)
-            
             # GET OBS (Refresh observation relative to new Waypoint)
-            _, obs = env._get_observation()
+            lidar_data, obs = env._get_observation()
+
+            # DRIVER UPDATE (Sense -> Map -> Plan)
+            driver.update(lidar_data) 
             
             # 3. RL PREDICT
             action, _ = model.predict(obs, deterministic=True)
+            # action = pid_controller.control(env.vehicle, env.map_env.goal, 2.0)
             
             # 4. STEP
-            obs, lidar_data, reward, terminated, _, _ = env.step(action)
+            obs, reward, terminated, truncated, info = env.step(action)
+            lidar_data = info['lidar_data']
             
             episode_reward += reward
             steps += 1
@@ -275,57 +287,58 @@ def visualize_episode_with_renderer(model, env: AutonomousCarEnv, config: Config
 
             pos = env.vehicle.get_position()
             renderer.add_trajectory_point(pos[0], pos[1])
-
-        # DRAWING
-        renderer.clear()
-        renderer.draw_grid()
-        
-        if env.map_env:
-            renderer.draw_map(env.map_env)
-            renderer.draw_start_goal(env.map_env.start, driver.final_goal)
+        frame_counter += 1
+        if frame_counter % render_every_n_frames == 0:
+            # DRAWING
+            renderer.clear()
+            renderer.draw_grid()
             
-        if show_internal_map:
-            for obs_obj in driver.internal_map.obstacles:
-                if hasattr(obs_obj, 'radius'):
-                    cx, cy = renderer.world_to_screen(obs_obj.x, obs_obj.y)
-                    scale = (renderer.scale_x + renderer.scale_y) / 2
-                    rad = int(obs_obj.radius * scale)
-                    pygame.draw.circle(renderer.screen, (255, 50, 50), (cx, cy), rad, 1)
-
-        if show_path and driver.current_path_points:
-            points = [(p.x, p.y) for p in driver.current_path_points]
-            if len(points) > 1:
-                screen_points = [renderer.world_to_screen(p[0], p[1]) for p in points]
-                pygame.draw.lines(renderer.screen, (255, 255, 0), False, screen_points, 2)
+            if env.map_env:
+                renderer.draw_map(env.map_env)
+                renderer.draw_start_goal(env.map_env.start, driver.final_goal)
                 
-            if driver.current_path_points:
-                try:
-                    wp = driver.current_path_points[driver.current_wp_idx]
-                    wx, wy = renderer.world_to_screen(wp.x, wp.y)
-                    pygame.draw.circle(renderer.screen, (0, 255, 0), (wx, wy), 5)
-                except IndexError:
-                    pass
+            if show_internal_map:
+                for obs_obj in driver.internal_map.obstacles:
+                    if hasattr(obs_obj, 'radius'):
+                        cx, cy = renderer.world_to_screen(obs_obj.x, obs_obj.y)
+                        scale = (renderer.scale_x + renderer.scale_y) / 2
+                        rad = int(obs_obj.radius * scale)
+                        pygame.draw.circle(renderer.screen, (255, 50, 50), (cx, cy), rad, 1)
 
-        renderer.draw_lidar_zone(
-            vehicle=env.vehicle,
-            sensor_range=env.lidar_range,
-            fov_deg=360,
-            color=(0, 255, 255), 
-            alpha=40
-        )
-        renderer.draw_trajectory()
-        if env.vehicle:
-            renderer.draw_vehicle(env.vehicle)
-        
-        additional_info = {
-            'Steps': steps,
-            'Real Dist': f"{dist_to_final:.2f}m"
-        }
-        renderer.draw_info_panel(env.vehicle, steps, clock.get_fps(), additional_info)
-        
-        renderer.draw_legend()
-        renderer.update()
-        clock.tick(target_fps)
+            if show_path and driver.current_path_points:
+                points = [(p.x, p.y) for p in driver.current_path_points]
+                if len(points) > 1:
+                    screen_points = [renderer.world_to_screen(p[0], p[1]) for p in points]
+                    pygame.draw.lines(renderer.screen, (255, 255, 0), False, screen_points, 2)
+                    
+                if driver.current_path_points:
+                    try:
+                        wp = driver.current_path_points[driver.current_wp_idx]
+                        wx, wy = renderer.world_to_screen(wp.x, wp.y)
+                        pygame.draw.circle(renderer.screen, (0, 255, 0), (wx, wy), 5)
+                    except IndexError:
+                        pass
+
+            renderer.draw_lidar_zone(
+                vehicle=env.vehicle,
+                sensor_range=env.lidar_range,
+                fov_deg=360,
+                color=(0, 255, 255), 
+                alpha=40
+            )
+            renderer.draw_trajectory()
+            if env.vehicle:
+                renderer.draw_vehicle(env.vehicle)
+            
+            additional_info = {
+                'Steps': steps,
+                'Real Dist': f"{dist_to_final:.2f}m"
+            }
+            renderer.draw_info_panel(env.vehicle, steps, clock.get_fps(), additional_info)
+            
+            renderer.draw_legend()
+            renderer.update()
+            clock.tick(target_fps)
 
     renderer.close()
 
@@ -385,7 +398,7 @@ def main():
         env = AutonomousCarEnv(
             map_env=map_env,
             vehicle=vehicle,
-            max_steps=1000,
+            max_steps=10000,
             num_lidar_rays=16,
             render_mode=None 
         )
