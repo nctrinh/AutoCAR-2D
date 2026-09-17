@@ -6,6 +6,7 @@ training:
   save_freq: 10000
   device: "cpu"                       # "cuda" or "cpu"
   eval_episodes: 10
+  n_envs: "auto"                      # "auto" = cpu_count - 1, or an explicit int (1 = DummyVecEnv, single process)
 
 simulation:
   screen_width: 800
@@ -24,6 +25,14 @@ vehicle:
 environment:
   max_steps: 10000
   num_lidar_rays: 16
+  lidar_range: 20.0
+  goal_threshold: 3.0
+  cte_fail_threshold: 8.0
+  grid_resolution: 1.0            # grid resolution cho A* khi plan path gốc
+  fog_of_war: false
+  replan_lookahead_wp: 5
+  replan_grid_resolution: 1.0
+  replan_obstacle_radius: 0.5
 
 model:
   learning_rate: 0.0003
