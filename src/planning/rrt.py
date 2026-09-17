@@ -77,18 +77,9 @@ class RRTPlanner(BasePlanner):
             print("RRT: Goal position is invalid!")
             return None
         
-        for i in range(self.max_iterations):
-            self.iterations = i + 1
-            
-            # Sample random point (with bias toward goal)
-            if np.random.random() < self.goal_sample_rate:
-                random_point = RRTNode(goal[0], goal[1])
-            else:
-                random_point = self._sample_random_point()
-            
-            self.nodes = [RRTNode(start[0], start[1])]
+        self.nodes = [RRTNode(start[0], start[1])]
         self.iterations = 0
-        
+
         for i in range(self.max_iterations):
             self.iterations = i + 1
             

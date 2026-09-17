@@ -196,8 +196,8 @@ class PathFollowingPID:
     and using it as the target.
     """
     
-    def __init__(self, 
-                 vehicle: Vehicle = Vehicle(),
+    def __init__(self,
+                 vehicle: Optional[Vehicle] = None,
                  pid_controller: Optional[PIDController] = None,
                  lookahead_distance: float = 5.0,
                  target_speed: float = 5.0,
@@ -205,13 +205,13 @@ class PathFollowingPID:
                  dt: float = 0.1):
         """
         Initialize path following controller.
-        
+
         Args:
             pid_controller: PID controller instance (creates default if None)
             lookahead_distance: Distance ahead on path to target
             target_speed: Desired speed along path
         """
-        self.vehicle = vehicle
+        self.vehicle = vehicle if vehicle is not None else Vehicle()
         self.pid = pid_controller or PIDController()
         self.lookahead_distance = lookahead_distance
         self.target_speed = target_speed

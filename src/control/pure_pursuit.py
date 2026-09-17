@@ -6,12 +6,13 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from src.core.vehicle import Vehicle
 from src.planning.base_planner import Path as PlannedPath, PathPoint
+from src.control import path_geometry
 
 
 
 class PurePursuitController:
-    def __init__(self, 
-                 vehicle: Vehicle = Vehicle(),
+    def __init__(self,
+                 vehicle: Optional[Vehicle] = None,
                  lookahead_distance: float = 5.0,
                  lookahead_gain: float = 0.5,
                  min_lookahead: float = 2.0,
@@ -36,7 +37,7 @@ class PurePursuitController:
 
         """
 
-        self.vehicle = vehicle
+        self.vehicle = vehicle if vehicle is not None else Vehicle()
         self.base_lookahead = lookahead_distance
         self.lookahead_gain = lookahead_gain
         self.min_lookahead = min_lookahead
@@ -182,8 +183,8 @@ class AdaptivePurePursuitController(PurePursuitController):
     
     Adjusts speed based on path curvature and obstacles.
     """
-    def __init__(self, 
-                 vehicle: Vehicle = Vehicle(),
+    def __init__(self,
+                 vehicle: Optional[Vehicle] = None,
                  lookahead_distance: float = 5.0,
                  lookahead_gain: float = 0.5,
                  min_lookahead: float = 2.0,
@@ -234,14 +235,17 @@ class AdaptivePurePursuitController(PurePursuitController):
     
     def _estimate_curvature(self) -> float:
         """
-        Estimate path curvature ahead of vehicle.
-        
+        Estimate path curvature ahead of vehicle, using the 3 path points
+        starting at current_target_idx (shared math with PathTrackingEnv,
+        see src/control/path_geometry.py -- keeps RL-vs-classical benchmarks
+        apples-to-apples).
+
         Returns:
             Estimated curvature (1/radius)
         """
         if self.path is None or len(self.path.points) < 3:
             return 0.0
-        
+
         vehicle_pos = self.vehicle.get_position()
 
         points_ahead = []
@@ -252,32 +256,8 @@ class AdaptivePurePursuitController(PurePursuitController):
 
             if distance < self.curvature_lookahead:
                 points_ahead.append((point.x, point.y))
-        
+
         if len(points_ahead) < 3:
             return 0.0
-        
-        p1, p2, p3 = points_ahead[:3]
 
-        a = np.array(p1)
-        b = np.array(p2)
-        c = np.array(p3)
-        
-        # Vectors
-        ab = b - a
-        bc = c - b
-        
-        # Angle change
-        angle1 = np.arctan2(ab[1], ab[0])
-        angle2 = np.arctan2(bc[1], bc[0])
-        angle_diff = abs(angle2 - angle1)
-        angle_diff = min(angle_diff, 2*np.pi - angle_diff)
-
-        total_dist = np.linalg.norm(ab) + np.linalg.norm(bc)
-        
-        if total_dist < 1e-3:
-            return 0.0
-        
-        # Approximate curvature
-        curvature = angle_diff / total_dist
-        
-        return curvature
+        return path_geometry.estimate_curvature(0, np.array(points_ahead[:3]))
