@@ -35,6 +35,46 @@ class AStarPlanner(BasePlanner):
                     grid[x, y] = True
         return grid
 
+    def _is_valid_start_or_goal(self, grid_pos: Tuple[int, int],
+                                world_pos: Tuple[float, float], label: str) -> bool:
+        gx, gy = grid_pos
+        if not (0 <= gx < self.grid_width and 0 <= gy < self.grid_height):
+            print(f"A*: {label} position is out of map bounds!")
+            return False
+        if self.occupancy_grid[gx, gy]:
+            return True
+        # Soft-margin violation only -- accept if not a true collision.
+        if self.map_env.is_collision(world_pos[0], world_pos[1], safety_margin=0):
+            print(f"A*: {label} position is invalid (actual collision)!")
+            return False
+        return True
+
+    def mark_obstacle_world(self, x: float, y: float, radius: float) -> None:
+        """Incrementally flip the occupancy grid cells within `radius` of
+        (x, y) to occupied, WITHOUT rebuilding the grid from map_env. Used
+        by online replanning (fog-of-war) so newly discovered obstacles can
+        be registered in O(radius^2 / grid_resolution^2) instead of paying
+        for a full grid rebuild (O(grid_width * grid_height * obstacles))
+        on every discovery."""
+        gx_min = int(np.floor((x - radius) / self.grid_resolution))
+        gx_max = int(np.ceil((x + radius) / self.grid_resolution))
+        gy_min = int(np.floor((y - radius) / self.grid_resolution))
+        gy_max = int(np.ceil((y + radius) / self.grid_resolution))
+        for gx in range(max(0, gx_min), min(self.grid_width, gx_max + 1)):
+            wx = (gx + 0.5) * self.grid_resolution
+            for gy in range(max(0, gy_min), min(self.grid_height, gy_max + 1)):
+                wy = (gy + 0.5) * self.grid_resolution
+                if (wx - x) ** 2 + (wy - y) ** 2 <= radius ** 2:
+                    self.occupancy_grid[gx, gy] = False
+
+    def is_occupied_world(self, x: float, y: float) -> bool:
+        """O(1) occupancy query against the current grid (post any
+        mark_obstacle_world updates) -- avoids looping map_env.obstacles."""
+        gx, gy = self.world_to_grid(x, y)
+        if not (0 <= gx < self.grid_width and 0 <= gy < self.grid_height):
+            return True
+        return not self.occupancy_grid[gx, gy]
+
     def world_to_grid(self, x: float, y: float) -> Tuple[int, int]:
         grid_x = int(np.floor(x / self.grid_resolution))
         grid_y = int(np.floor(y / self.grid_resolution))
@@ -52,13 +92,19 @@ class AStarPlanner(BasePlanner):
         start_grid = self.world_to_grid(start[0], start[1])
         goal_grid = self.world_to_grid(goal[0], goal[1])
 
-        # Validate Start/Goal
-        if not self.occupancy_grid[start_grid[0], start_grid[1]]:
-            print("A*: Start position is invalid!")
+        # Validate Start/Goal.
+        # occupancy_grid was rasterized using map_env's SOFT safety_margin,
+        # which keeps the rest of the planned path comfortably away from
+        # obstacles. But requiring the exact start/goal point to also clear
+        # that soft margin is too strict: kinematic inertia can leave the
+        # vehicle slightly inside the margin (not actually colliding) right
+        # when a replan is needed, e.g. mid-avoidance-maneuver. In that case
+        # fall back to the TRUE (margin=0) collision test -- only reject if
+        # the point is a genuine collision, not merely within the margin.
+        if not self._is_valid_start_or_goal(start_grid, start, "Start"):
             return None
-        
-        if not self.occupancy_grid[goal_grid[0], goal_grid[1]]:
-            print("A*: Goal position is invalid!")
+
+        if not self._is_valid_start_or_goal(goal_grid, goal, "Goal"):
             return None
         
         # Priority Queue: (f_score, counter, node)

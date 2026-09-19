@@ -167,7 +167,12 @@ class PathTrackingEnv(gym.Env):
         self.replan_grid_resolution = replan_grid_resolution
         self.replan_obstacle_radius = replan_obstacle_radius
         self.internal_map: Optional[Map2D] = None
-        self._known_obstacle_points: list = []  # tránh add trùng obstacle
+        # Bucketed theo (merge_radius x merge_radius) cell để dedup obstacle
+        # mới phát hiện trong O(1) trung bình, tránh O(N) scan toàn bộ điểm
+        # đã biết mỗi lần LIDAR chạm vật cản (bottleneck chính gây lag tăng
+        # dần theo thời gian khi fog_of_war=True).
+        self._known_obstacle_cells: Dict[Tuple[int, int], list] = {}
+        self._replan_planner: Optional[AStarPlanner] = None  # persistent, xây incremental
         self.replan_count = 0  # số lần đã replan trong episode hiện tại (để log/debug)
 
         self._external_path = path  # có thể None -> auto-plan khi reset
@@ -205,6 +210,8 @@ class PathTrackingEnv(gym.Env):
         self._lidar_cache_key = None
 
         self.renderer = None
+        self._clock = None
+        self.dt = 0.05
 
     # ------------------------------------------------------------------ #
     # Setup helpers
@@ -274,9 +281,19 @@ class PathTrackingEnv(gym.Env):
         biết (ban đầu là KHÔNG obstacle nào) -- vì vậy path đầu tiên thường
         là đường thẳng-ish tới goal, sẽ được _maybe_replan() sửa dần khi xe
         di chuyển và LIDAR phát hiện obstacle thật.
+
+        Planner được tạo ở đây được GIỮ LẠI làm self._replan_planner cho cả
+        episode: các lần replan sau đó cập nhật occupancy grid của planner
+        này một cách incremental (AStarPlanner.mark_obstacle_world) thay vì
+        build lại AStarPlanner mới từ đầu (rebuild toàn bộ grid_width x
+        grid_height qua is_collision) mỗi lần replan -- đây từng là nguồn
+        chính gây lag tăng dần khi số obstacle phát hiện được ngày càng
+        nhiều qua episode.
         """
-        planner = AStarPlanner(self.internal_map, grid_resolution=self.replan_grid_resolution)
-        path = planner.plan(self.map_env.start, self.map_env.goal, info=False)
+        self._replan_planner = AStarPlanner(
+            self.internal_map, grid_resolution=self.replan_grid_resolution
+        )
+        path = self._replan_planner.plan(self.map_env.start, self.map_env.goal, info=False)
         if path is None:
             raise RuntimeError(
                 "A* (fog-of-war, internal_map trống) không tìm được đường đi "
@@ -293,11 +310,12 @@ class PathTrackingEnv(gym.Env):
         super().reset(seed=seed)
 
         self.replan_count = 0
-        self._known_obstacle_points = []
+        self._known_obstacle_cells = {}
+        self._replan_planner = None
 
         if self.fog_of_war and self._external_path is None:
             self.internal_map = self._create_empty_internal_map()
-            self.path = self._plan_path_fog_of_war()
+            self.path = self._plan_path_fog_of_war()  # cũng khởi tạo self._replan_planner
         else:
             self.internal_map = None
             self.path = self._external_path or self._plan_path()
@@ -464,27 +482,69 @@ class PathTrackingEnv(gym.Env):
                 self.internal_map.add_obstacle(
                     CircleObstacle(ox, oy, radius=self.replan_obstacle_radius)
                 )
-                self._known_obstacle_points.append((ox, oy))
+                self._register_known_obstacle(ox, oy)
+                # Cập nhật incremental vào occupancy grid của planner persistent
+                # -- O(radius^2/resolution^2), KHÔNG rebuild grid từ đầu.
+                # Cộng thêm internal_map.safety_margin để khớp đúng bán kính
+                # loại trừ mà is_collision() gốc từng áp dụng khi rebuild
+                # toàn bộ grid (obstacle.distance_to_point(x,y) < safety_margin
+                # <=> D < radius + safety_margin) -- thiếu phần này sẽ khiến
+                # path mới né vật cản mới phát hiện SÁT hơn dự kiến.
+                if self._replan_planner is not None:
+                    self._replan_planner.mark_obstacle_world(
+                        ox, oy, self.replan_obstacle_radius + self.internal_map.safety_margin
+                    )
 
-    def _is_newly_discovered(self, x: float, y: float, merge_radius: float = 1.5) -> bool:
+    _OBSTACLE_MERGE_RADIUS = 1.5
+
+    def _obstacle_cell(self, x: float, y: float) -> Tuple[int, int]:
+        r = self._OBSTACLE_MERGE_RADIUS
+        return (int(math.floor(x / r)), int(math.floor(y / r)))
+
+    def _is_newly_discovered(self, x: float, y: float) -> bool:
         """Tránh spam hàng trăm CircleObstacle chồng nhau cho cùng một vật
-        cản khi xe đứng gần nó nhiều step liên tiếp."""
-        for (kx, ky) in self._known_obstacle_points:
-            if np.hypot(kx - x, ky - y) < merge_radius:
-                return False
+        cản khi xe đứng gần nó nhiều step liên tiếp.
+
+        Dùng spatial hash (bucket theo cell merge_radius x merge_radius)
+        thay vì scan toàn bộ _known_obstacle_points: số lượng điểm đã biết
+        chỉ tăng dần suốt episode, scan tuyến tính mỗi LIDAR hit mỗi step
+        khiến chi phí tăng dần theo thời gian đúng như hiện tượng lag quan
+        sát được. Chỉ cần kiểm tra 3x3 cell lân cận (đủ để bắt mọi điểm
+        trong bán kính merge_radius) -- O(1) amortized bất kể N.
+        """
+        r = self._OBSTACLE_MERGE_RADIUS
+        cx, cy = self._obstacle_cell(x, y)
+        for dgx in (-1, 0, 1):
+            for dgy in (-1, 0, 1):
+                for (kx, ky) in self._known_obstacle_cells.get((cx + dgx, cy + dgy), ()):
+                    if math.hypot(kx - x, ky - y) < r:
+                        return False
         return True
+
+    def _register_known_obstacle(self, x: float, y: float) -> None:
+        cell = self._obstacle_cell(x, y)
+        self._known_obstacle_cells.setdefault(cell, []).append((x, y))
 
     def _maybe_replan(self) -> None:
         """Kiểm tra xem vài waypoint phía trước có bị obstacle mới phát
         hiện chặn không; nếu có, replan bằng A* trên internal_map (map mà
-        agent 'biết' tính tới thời điểm hiện tại) từ vị trí xe -> goal cuối."""
-        if self.path is None or len(self.path.points) == 0:
+        agent 'biết' tính tới thời điểm hiện tại) từ vị trí xe -> goal cuối.
+
+        Dùng self._replan_planner.is_occupied_world() (tra bảng O(1) trên
+        occupancy grid) cho check "blocked" -- chạy MỖI step bất kể có
+        replan hay không, nên trước đây (loop internal_map.is_collision(),
+        tức loop toàn bộ obstacle list ngày càng lớn) là một nguồn lag
+        tăng dần khác. planner cũng được TÁI SỬ DỤNG (không tạo mới) khi
+        thực sự replan, vì occupancy grid của nó đã được cập nhật
+        incremental trong _update_internal_map_from_lidar().
+        """
+        if self.path is None or len(self.path.points) == 0 or self._replan_planner is None:
             return
 
         end_idx = min(self.current_wp_idx + self.replan_lookahead_wp, len(self.path.points))
         blocked = False
         for wp in self.path.points[self.current_wp_idx:end_idx]:
-            if self.internal_map.is_collision(wp.x, wp.y):
+            if self._replan_planner.is_occupied_world(wp.x, wp.y):
                 blocked = True
                 break
 
@@ -493,13 +553,26 @@ class PathTrackingEnv(gym.Env):
 
         pos = self.vehicle.get_position()
         goal = self.map_env.goal
-        planner = AStarPlanner(self.internal_map, grid_resolution=self.replan_grid_resolution)
-        new_path = planner.plan(pos, goal, info=False)
+        new_path = self._replan_planner.plan(pos, goal, info=False)
 
         if new_path is not None and len(new_path.points) >= 2:
             self.path = new_path
             self._path_cum_dist = self._compute_cumulative_distances(self.path)
-            self.current_wp_idx = 0
+            pts = self.path.to_array()
+            self.current_wp_idx = path_geometry.closest_segment_index(pts, pos, search_start=0)
+
+            # Neo lại prev_progress_dist theo path MỚI tại vị trí xe hiện
+            # tại, để reward "progress dọc theo path" không nhảy đột ngột
+            # giữa "đã đi bao xa trên path CŨ" và "đã đi bao xa trên path
+            # MỚI" ngay tại bước replan (bug: trước đây thiếu bước này,
+            # khiến mỗi lần replan tạo ra một cú phạt reward giả -- lớn và
+            # ngẫu nhiên -- không phản ánh hành vi thật của agent).
+            _, _, t, seg_len = path_geometry.path_tracking_error(
+                pts, pos, self.vehicle.state.theta, self.current_wp_idx
+            )
+            i = min(self.current_wp_idx, len(pts) - 2)
+            self.prev_progress_dist = float(self._path_cum_dist[i] + t * seg_len)
+
             self.replan_count += 1
         # Nếu A* không tìm được đường trên internal_map hiện tại (thông tin
         # còn thiếu), giữ nguyên path cũ và thử lại ở step kế tiếp khi biết
@@ -661,6 +734,8 @@ class PathTrackingEnv(gym.Env):
             return self._render_rgb_array()
 
     def _render_human(self):
+        import pygame
+
         if self.renderer is None:
             from src.simulation.renderer import Renderer
 
@@ -671,8 +746,17 @@ class PathTrackingEnv(gym.Env):
                 world_height=self.map_env.height,
                 caption="RL Path Tracking Training",
             )
-
-        import pygame
+            # metadata["render_fps"] was declared but never actually
+            # enforced anywhere -- render() had no pacing at all, so the
+            # step+render loop ran as fast as Python could execute it. Each
+            # env.step() advances a FIXED self.vehicle.dt (0.1s) of sim
+            # time regardless of wall-clock time, so with no throttling
+            # here many 0.1s-steps get rendered per real second -- the
+            # vehicle visually looks sped up. Pace to 1/dt, not the
+            # declared render_fps, since render() is called exactly once
+            # per physics step (no sub-step interpolation) -- that's the
+            # only rate that maps 1 real second to 1 simulated second.
+            self._clock = pygame.time.Clock()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -693,6 +777,7 @@ class PathTrackingEnv(gym.Env):
 
         self.renderer.draw_vehicle(self.vehicle)
         self.renderer.update()
+        self._clock.tick(1.0 / self.dt)
 
     def _render_rgb_array(self):
         if self.renderer is None:
@@ -718,3 +803,4 @@ class PathTrackingEnv(gym.Env):
         if self.renderer is not None:
             self.renderer.close()
             self.renderer = None
+            self._clock = None
