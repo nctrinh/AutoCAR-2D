@@ -9,16 +9,28 @@ sys.path.append(str(pathlib_Path(__file__).resolve().parents[2]))
 
 from src.planning.base_planner import BasePlanner, PathPoint, Path
 from src.core.map import Map2D
+from src.planning import path_smoothing
 
 class AStarPlanner(BasePlanner):
-    def __init__(self, map_env: Map2D, grid_resolution: float = 0.5, 
+    def __init__(self, map_env: Map2D, grid_resolution: float = 0.5,
                  max_iterations: int = 10000, heuristic_weight: float = 1.0,
-                 spacing: float = 3.0):
+                 spacing: float = 3.0, min_turn_radius: Optional[float] = None):
+        """
+        Args:
+            min_turn_radius: if given, sharp vertices produced by the
+                line-of-sight string-pulling smoothing pass are rounded
+                with arcs of at least this radius (the vehicle's true
+                minimum turning radius, wheelbase / tan(max_steering_angle))
+                so the path stays kinematically followable at tight pinch
+                points. None (default) preserves the old greedy-shortest,
+                sharp-cornered behavior.
+        """
         self.map_env = map_env
         self.grid_resolution = grid_resolution
         self.max_iterations = max_iterations
         self.heuristic_weight = heuristic_weight
         self.spacing = spacing
+        self.min_turn_radius = min_turn_radius
         
         self.grid_width = int(np.ceil(self.map_env.width / self.grid_resolution))
         self.grid_height = int(np.ceil(self.map_env.height / self.grid_resolution))
@@ -173,7 +185,8 @@ class AStarPlanner(BasePlanner):
                     heapq.heappush(open_set, (f, counter, neighbor))
         
         self.planning_time = time.time() - start_time
-        print(f"A*: No path found after {self.iterations} iterations!")
+        if info:
+            print(f"A*: No path found after {self.iterations} iterations!")
         return None
 
     def _get_grid_neighbors(self, node: Tuple[int, int]) -> List[Tuple[int, int]]:
@@ -218,10 +231,18 @@ class AStarPlanner(BasePlanner):
         path_points.append(PathPoint(real_goal[0], real_goal[1]))
         
         raw_path = Path(path_points)
-        
+
         smoothed_path = self._smooth_path(raw_path)
+        if self.min_turn_radius is not None:
+            # Round sharp vertices BEFORE resampling: resampling only adds
+            # points along existing straight segments, it doesn't change
+            # geometry, so the kinematic fillet has to happen on the
+            # reduced (still sharp-cornered) waypoint set.
+            smoothed_path = path_smoothing.smooth_path_kinematic(
+                smoothed_path, self.map_env, self.min_turn_radius
+            )
         smoothed_path = self._resample_path(smoothed_path)
-        
+
         return smoothed_path
 
     def _smooth_path(self, path: Path) -> Path:

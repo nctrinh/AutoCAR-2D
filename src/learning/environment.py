@@ -72,6 +72,7 @@ from src.core.vehicle import Vehicle, VehicleConfig
 from src.core.map import Map2D, CircleObstacle
 from src.planning.base_planner import Path as PlannedPath, PathPoint
 from src.planning.a_star import AStarPlanner
+from src.planning import path_smoothing
 from src.control import path_geometry
 
 
@@ -155,6 +156,13 @@ class PathTrackingEnv(gym.Env):
 
         self.map_env = map_env or self._create_default_map()
         self.vehicle = vehicle if vehicle is not None else Vehicle()
+        # Vehicle's true minimum turning radius (bicycle model), used to
+        # keep A*-generated paths kinematically followable instead of
+        # demanding instant direction changes -- see src/planning/
+        # path_smoothing.py.
+        self._min_turn_radius = self.vehicle.config.wheelbase / np.tan(
+            self.vehicle.config.max_steering_angle
+        )
         self.max_steps = max_steps
         self.num_lidar_rays = num_lidar_rays
         self.lidar_range = lidar_range
@@ -254,7 +262,9 @@ class PathTrackingEnv(gym.Env):
                 "map_env cần set_start()/set_goal() hoặc phải truyền path= "
                 "trực tiếp cho PathTrackingEnv."
             )
-        planner = AStarPlanner(self.map_env, grid_resolution=1.0)
+        planner = AStarPlanner(
+            self.map_env, grid_resolution=1.0, min_turn_radius=self._min_turn_radius
+        )
         path = planner.plan(self.map_env.start, self.map_env.goal, info=False)
         if path is None:
             raise RuntimeError(
@@ -291,7 +301,9 @@ class PathTrackingEnv(gym.Env):
         nhiều qua episode.
         """
         self._replan_planner = AStarPlanner(
-            self.internal_map, grid_resolution=self.replan_grid_resolution
+            self.internal_map,
+            grid_resolution=self.replan_grid_resolution,
+            min_turn_radius=self._min_turn_radius,
         )
         path = self._replan_planner.plan(self.map_env.start, self.map_env.goal, info=False)
         if path is None:
@@ -556,6 +568,23 @@ class PathTrackingEnv(gym.Env):
         new_path = self._replan_planner.plan(pos, goal, info=False)
 
         if new_path is not None and len(new_path.points) >= 2:
+            # A* plans a purely geometric route from pos -> goal with zero
+            # regard for which way the vehicle is actually pointed/moving
+            # right now. If the new path's first segment heads off sharply
+            # from the vehicle's current heading (common right after a
+            # replan -- that's usually WHY it replanned, a wall just
+            # appeared in its way), the tracker is forced into an instant
+            # direction change with no room to execute it, right next to
+            # whatever obstacle triggered the replan. Round that entry
+            # with an arc instead. Checked against map_env (the TRUE map),
+            # not internal_map: this maneuver plays out within the next
+            # few meters, well inside current LIDAR range, so it's a live
+            # local-sensing check, not a "trust distant unseen map" one --
+            # replanning further down the route still correctly relies on
+            # only what's been discovered.
+            new_path = path_smoothing.smooth_entry_heading(
+                new_path, self.map_env, self._min_turn_radius, self.vehicle.state.theta
+            )
             self.path = new_path
             self._path_cum_dist = self._compute_cumulative_distances(self.path)
             pts = self.path.to_array()
