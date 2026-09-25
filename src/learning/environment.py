@@ -123,9 +123,9 @@ class PathTrackingEnv(gym.Env):
         replan_obstacle_radius: float = 0.5,
         lidar_grid_resolution: float = 0.5,
         enable_recovery: bool = False,
-        recovery_trigger_distance: float = 2.5,
+        recovery_trigger_distance: float = 1.0,
         recovery_reverse_steps: int = 15,
-        recovery_front_half_angle_deg: float = 45.0,
+        recovery_front_half_angle_deg: float = 20.0,
     ):
         """
         Args:
@@ -169,11 +169,24 @@ class PathTrackingEnv(gym.Env):
                      CỘNG THÊM quãng đường phanh ước tính theo vận tốc hiện
                      tại (v^2 / (2*|max_deceleration|)) -- không dùng một
                      ngưỡng cố định vì ở tốc độ cao xe cần nhiều chỗ hơn để
-                     dừng lại trước khi có thể lùi.
+                     dừng lại trước khi có thể lùi. Giữ giá trị NHỎ (mặc
+                     định 1.0): buffer này cộng dồn với braking_distance đã
+                     đủ lớn ở tốc độ cruise rồi -- một buffer lớn hơn nữa
+                     kết hợp front cone rộng từng khiến recovery kích hoạt
+                     nhầm ngay cả khi path hoàn toàn an toàn (cte~0), chỉ vì
+                     một khúc cua bình thường mang một vật cản vào tầm cone
+                     trong bán kính phanh -- xem recovery_front_half_angle_deg.
             recovery_reverse_steps: số step lùi liên tục mỗi lần kích hoạt,
                      trước khi trả quyền điều khiển lại cho controller/policy.
             recovery_front_half_angle_deg: nửa góc (độ) của "front cone" tính
                      từ hướng xe hiện tại, dùng để xét vật cản phía trước.
+                     Giữ HẸP (mặc định 20°, không phải 45°): cone rộng bắt
+                     luôn cả vật cản chỉ đơn thuần nằm bên cạnh một khúc cua
+                     đang bám path bình thường (controller vẫn đang track
+                     tốt, cte/heading_error nhỏ), không phải xe đang thực sự
+                     lao thẳng vào nó -- nguyên nhân gây ra hành vi "lùi
+                     nhầm dù không gần vật cản" quan sát được khi cone quá
+                     rộng.
         """
         super().__init__()
 

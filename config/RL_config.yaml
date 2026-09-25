@@ -34,7 +34,7 @@ environment:
   replan_grid_resolution: 1.0
   replan_obstacle_radius: 0.5
   enable_recovery: false          # bật ở evaluate/deploy cho map có ngõ cụt hẹp (vd map_5, map_6)
-  recovery_trigger_distance: 2.5
+  recovery_trigger_distance: 1.0
   recovery_reverse_steps: 15
 
 model:
