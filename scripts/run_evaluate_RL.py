@@ -247,7 +247,8 @@ def main():
             replan_obstacle_radius=env_cfg.get("replan_obstacle_radius", 0.5),
             enable_recovery=enable_recovery,
             recovery_trigger_distance=env_cfg.get("recovery_trigger_distance", 1.0),
-            recovery_reverse_steps=env_cfg.get("recovery_reverse_steps", 15),
+            recovery_reverse_steps=env_cfg.get("recovery_reverse_steps", 30),
+            recovery_escape_margin=env_cfg.get("recovery_escape_margin", 3.0),
         )
 
     # --- RL ---

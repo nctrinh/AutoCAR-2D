@@ -124,8 +124,9 @@ class PathTrackingEnv(gym.Env):
         lidar_grid_resolution: float = 0.5,
         enable_recovery: bool = False,
         recovery_trigger_distance: float = 1.0,
-        recovery_reverse_steps: int = 15,
+        recovery_reverse_steps: int = 30,
         recovery_front_half_angle_deg: float = 20.0,
+        recovery_escape_margin: float = 3.0,
     ):
         """
         Args:
@@ -176,17 +177,34 @@ class PathTrackingEnv(gym.Env):
                      nhầm ngay cả khi path hoàn toàn an toàn (cte~0), chỉ vì
                      một khúc cua bình thường mang một vật cản vào tầm cone
                      trong bán kính phanh -- xem recovery_front_half_angle_deg.
-            recovery_reverse_steps: số step lùi liên tục mỗi lần kích hoạt,
-                     trước khi trả quyền điều khiển lại cho controller/policy.
-            recovery_front_half_angle_deg: nửa góc (độ) của "front cone" tính
-                     từ hướng xe hiện tại, dùng để xét vật cản phía trước.
-                     Giữ HẸP (mặc định 20°, không phải 45°): cone rộng bắt
-                     luôn cả vật cản chỉ đơn thuần nằm bên cạnh một khúc cua
-                     đang bám path bình thường (controller vẫn đang track
-                     tốt, cte/heading_error nhỏ), không phải xe đang thực sự
-                     lao thẳng vào nó -- nguyên nhân gây ra hành vi "lùi
-                     nhầm dù không gần vật cản" quan sát được khi cone quá
-                     rộng.
+            recovery_reverse_steps: SỐ STEP TỐI ĐA cho một lần lùi -- không
+                     phải thời lượng lùi cố định. Xe tiếp tục lùi (và đánh
+                     lái) cho tới khi (a) phía trước đã đủ trống để tiến trở
+                     lại an toàn, hoặc (b) phía sau bắt đầu bị chặn (lùi
+                     thêm sẽ va), TÙY ĐIỀU KIỆN NÀO XẢY RA TRƯỚC; giá trị
+                     này chỉ là một trần an toàn để không lùi vô hạn nếu vì
+                     lý do gì đó cả hai điều kiện trên không bao giờ đúng.
+                     (Bản trước đây lùi ĐÚNG số step này rồi trả lại quyền
+                     điều khiển vô điều kiện -- khiến xe lùi một đoạn rất
+                     ngắn, chưa đủ để né, rồi tiến thẳng vào lại chỗ vừa
+                     lùi ra và va chạm.)
+            recovery_front_half_angle_deg: nửa góc (độ) của "front cone" (và
+                     "rear cone" đối xứng phía sau, dùng khi đang lùi) tính
+                     từ hướng xe hiện tại, dùng để xét vật cản phía trước/
+                     sau. Giữ HẸP (mặc định 20°, không phải 45°): cone rộng
+                     bắt luôn cả vật cản chỉ đơn thuần nằm bên cạnh một khúc
+                     cua đang bám path bình thường (controller vẫn đang
+                     track tốt, cte/heading_error nhỏ), không phải xe đang
+                     thực sự lao thẳng vào nó -- nguyên nhân gây ra hành vi
+                     "lùi nhầm dù không gần vật cản" quan sát được khi cone
+                     quá rộng.
+            recovery_escape_margin: khoảng clearance THÊM (m), CỘNG vào
+                     recovery_trigger_distance, mà front cone phải đạt được
+                     thì mới coi là "đủ trống để tiến trở lại" (ngưỡng
+                     resume). Cố định, KHÔNG phụ thuộc vận tốc -- xem
+                     docstring của _recovery_resume_threshold() để biết vì
+                     sao một ngưỡng phụ thuộc vận tốc (live hoặc frozen tại
+                     lúc trigger) đều thất bại trong thực nghiệm.
         """
         super().__init__()
 
@@ -222,22 +240,30 @@ class PathTrackingEnv(gym.Env):
         self.enable_recovery = enable_recovery
         self.recovery_trigger_distance = recovery_trigger_distance
         self.recovery_reverse_steps = recovery_reverse_steps
-        self._recovery_steps_remaining = 0
+        self.recovery_escape_margin = recovery_escape_margin
+        self._recovery_active = False
+        self._recovery_step_count = 0
         self._recovery_steer = 0.0
         self.recovery_count = 0
         half_angle = math.radians(recovery_front_half_angle_deg)
-        self._front_cone_idx = np.array(
-            [
-                i
-                for i in range(num_lidar_rays)
-                if min(
-                    (i * 2 * math.pi / num_lidar_rays) % (2 * math.pi),
-                    2 * math.pi - (i * 2 * math.pi / num_lidar_rays) % (2 * math.pi),
-                )
-                <= half_angle
-            ],
-            dtype=int,
-        )
+
+        def _angular_distance(a: float, b: float) -> float:
+            d = abs(a - b) % (2 * math.pi)
+            return min(d, 2 * math.pi - d)
+
+        def _cone_idx(center_angle: float) -> np.ndarray:
+            return np.array(
+                [
+                    i
+                    for i in range(num_lidar_rays)
+                    if _angular_distance(i * 2 * math.pi / num_lidar_rays, center_angle)
+                    <= half_angle
+                ],
+                dtype=int,
+            )
+
+        self._front_cone_idx = _cone_idx(0.0)
+        self._rear_cone_idx = _cone_idx(math.pi)
         self._recovery_left_idx = num_lidar_rays // 4
         self._recovery_right_idx = (3 * num_lidar_rays) // 4
 
@@ -383,7 +409,8 @@ class PathTrackingEnv(gym.Env):
         self._known_obstacle_cells = {}
         self._replan_planner = None
         self.recovery_count = 0
-        self._recovery_steps_remaining = 0
+        self._recovery_active = False
+        self._recovery_step_count = 0
         self._recovery_steer = 0.0
 
         if self.fog_of_war and self._external_path is None:
@@ -673,6 +700,84 @@ class PathTrackingEnv(gym.Env):
     # ------------------------------------------------------------------ #
     # Reverse recovery: safety net cho ngõ cụt quá hẹp để rẽ chỉ bằng lái
     # ------------------------------------------------------------------ #
+    def _recovery_trigger_threshold(self) -> float:
+        """
+        How much front-cone clearance is needed to TRIGGER a reverse, given
+        the vehicle's CURRENT (live) speed: braking distance grows with
+        v^2, so a fast-moving vehicle needs to start backing up sooner.
+        """
+        velocity = float(self.vehicle.state.velocity)
+        braking_distance = (
+            (velocity ** 2) / (2.0 * abs(self.vehicle.config.max_deceleration))
+            if velocity > 0.0
+            else 0.0
+        )
+        return (
+            self.recovery_trigger_distance
+            + braking_distance
+            + self.vehicle.config.length / 2.0
+        )
+
+    def _recovery_resume_threshold(self) -> float:
+        """
+        How much front-cone clearance is needed to STOP reversing and let
+        the tracker drive forward again. Deliberately NOT a function of any
+        velocity, live or frozen:
+
+        - Live velocity during the reverse maneuver decays toward (and
+          through) zero while braking from the pre-trigger speed, so that
+          threshold shrinks every step for free, even with the vehicle
+          still sitting right next to the wall it triggered on -- braking
+          in place alone was enough to satisfy it (confirmed empirically:
+          exited after 1-2 steps with front-cone clearance unchanged).
+        - Freezing it at the trigger-instant velocity avoids that within
+          one recovery, but not across repeated retriggers: each retrigger
+          after a too-small escape happens at a LOWER approach speed than
+          the one before (the vehicle never got back up to speed before
+          hitting the threshold again), so the frozen bar ratchets DOWN
+          every cycle -- confirmed empirically as a real spiral (trigger
+          velocities 3.00 -> 1.12 -> ... m/s across successive retriggers
+          on the same dead end), each pass "succeeding" with less real
+          clearance than the last, until it collides.
+        - A fixed max_velocity-based bar (tried first) avoids both, but
+          with a 10 m/s max_velocity and 3 m/s^2 max_deceleration that
+          demands ~19.7m of clearance -- unreachable in most corridors, so
+          reverse always ran until the recovery_reverse_steps safety cap
+          instead of ever detecting a genuinely clear front.
+
+        A fixed, velocity-independent margin (recovery_escape_margin,
+        added on top of the base trigger buffer) sidesteps all three: it
+        can only be satisfied by the front-cone reading actually
+        increasing by that much, i.e. by real backward displacement, and
+        it does not change between or within recovery episodes.
+        """
+        return (
+            self.recovery_trigger_distance
+            + self.recovery_escape_margin
+            + self.vehicle.config.length / 2.0
+        )
+
+    def _recovery_rear_threshold(self) -> float:
+        """
+        Mirror of _recovery_trigger_threshold() for the REAR cone, used only
+        while actively reversing: is it still safe to keep backing up, or
+        is something behind about to be hit? Stopping a NEGATIVE velocity
+        (arresting the backward motion) uses max_acceleration as the
+        available deceleration lever, not max_deceleration -- that's the
+        only asymmetry versus the front-facing case.
+        """
+        velocity = float(self.vehicle.state.velocity)
+        braking_distance = (
+            (velocity ** 2) / (2.0 * self.vehicle.config.max_acceleration)
+            if velocity < 0.0
+            else 0.0
+        )
+        return (
+            self.recovery_trigger_distance
+            + braking_distance
+            + self.vehicle.config.length / 2.0
+        )
+
     def _maybe_override_for_recovery(self, action: np.ndarray) -> np.ndarray:
         """
         Some dead ends are geometrically too narrow for the vehicle's
@@ -687,51 +792,49 @@ class PathTrackingEnv(gym.Env):
 
         This intercepts the action BEFORE it reaches the vehicle: if the
         front cone is about to hit something, override with a fixed
-        reverse + opposite-lock command for a few steps (a scripted
-        three-point-turn opening move) instead of letting the tracker's
-        own action run. Control is handed back afterwards -- the tracker
-        re-approaches from a better angle, possibly retriggering recovery
-        again if the corridor needs more than one back-and-forth.
+        reverse + opposite-lock command (a scripted three-point-turn
+        opening move) instead of letting the tracker's own action run.
 
-        The trigger distance is NOT a fixed constant: recovery_trigger_
-        distance is a static clearance buffer, but the vehicle also needs
-        room to actually decelerate from whatever speed it's currently
-        carrying -- braking distance grows with v^2 (v^2 / (2*|max_decel|)),
-        e.g. ~4.2m of stopping room needed at just 5 m/s with the default
-        max_deceleration. Triggering only on the fixed buffer (no v^2 term)
-        under-triggers at cruise speed: the vehicle keeps coasting forward
-        while decelerating and still reaches the wall before it can turn
-        around, defeating the whole point of this safety net.
+        The reverse phase is CLOSED-LOOP, not a fixed blind duration: once
+        triggered, it keeps backing up, re-checking every step, until
+        EITHER the front cone has enough clearance to safely go forward
+        again OR the rear cone is now too close to keep backing up safely
+        -- whichever happens first. recovery_reverse_steps is only a
+        safety CAP on how long this can run, not the normal exit
+        condition. (An earlier version reversed for a fixed number of
+        steps and then handed control back unconditionally -- often too
+        short a distance to actually gain useful clearance, so the tracker
+        just drove forward straight back into the same wall.)
+
+        Control is handed back once the loop above exits -- the tracker
+        re-approaches from a better angle/position, possibly retriggering
+        recovery again if the corridor needs more than one back-and-forth.
 
         LIDAR rays originate at the vehicle's CENTER (get_position()), but
         the collision check in step() is against the vehicle's CORNERS --
-        the front bumper sits config.length/2 ahead of that center along
+        the front/rear bumper sits config.length/2 from that center along
         the heading. Comparing a center-based reading directly against a
         bumper-relevant threshold silently eats half the vehicle's length
         of margin, which is exactly the difference between "recovery
-        triggers with room to spare" and "still collides one step later"
-        (this was caught empirically: without this term, recovery fired
-        too late in a narrow-corridor test and the vehicle hit the wall
-        anyway).
+        triggers/releases with room to spare" and "still collides one step
+        later" (this was caught empirically: without this term, recovery
+        fired too late in a narrow-corridor test and the vehicle hit the
+        wall anyway).
         """
-        if self._recovery_steps_remaining > 0:
-            self._recovery_steps_remaining -= 1
-            return np.array([-1.0, self._recovery_steer], dtype=np.float32)
-
         lidar = self._get_lidar_readings()
         front_dist = float(np.min(lidar[self._front_cone_idx])) * self.lidar_range
-        velocity = float(self.vehicle.state.velocity)
-        braking_distance = (
-            (velocity ** 2) / (2.0 * abs(self.vehicle.config.max_deceleration))
-            if velocity > 0.0
-            else 0.0
-        )
-        trigger_distance = (
-            self.recovery_trigger_distance
-            + braking_distance
-            + self.vehicle.config.length / 2.0
-        )
-        if front_dist >= trigger_distance:
+
+        if self._recovery_active:
+            rear_dist = float(np.min(lidar[self._rear_cone_idx])) * self.lidar_range
+            front_clear = front_dist >= self._recovery_resume_threshold()
+            rear_blocked = rear_dist < self._recovery_rear_threshold()
+            self._recovery_step_count += 1
+            if front_clear or rear_blocked or self._recovery_step_count >= self.recovery_reverse_steps:
+                self._recovery_active = False
+                return action
+            return np.array([-1.0, self._recovery_steer], dtype=np.float32)
+
+        if front_dist >= self._recovery_trigger_threshold():
             return action
 
         left_clearance = float(lidar[self._recovery_left_idx])
@@ -743,7 +846,8 @@ class PathTrackingEnv(gym.Env):
         # inverted here, or this "recovery" steers the vehicle deeper into
         # the corner it's trying to escape.
         self._recovery_steer = -1.0 if left_clearance >= right_clearance else 1.0
-        self._recovery_steps_remaining = self.recovery_reverse_steps - 1
+        self._recovery_active = True
+        self._recovery_step_count = 0
         self.recovery_count += 1
         return np.array([-1.0, self._recovery_steer], dtype=np.float32)
 
