@@ -273,10 +273,11 @@ def main():
         app = AdaptivePurePursuitController(vehicle=Vehicle(vehicle_cfg))
 
         for name, controller in [("PID", pid), ("PurePursuit", pp), ("AdaptivePurePursuit", app)]:
-            env = make_fresh_env()
+            env = make_fresh_env(render_mode="human" if args.visualize else None)
             episodes = []
             for ep in range(args.episodes):
-                stats = run_classical_episode(controller, env)
+                render_this = args.visualize and ep == 0
+                stats = run_classical_episode(controller, env, render=render_this)
                 episodes.append(stats)
                 print(
                     f"  [{name}] Ep {ep + 1}: reward={stats['reward']:.2f} success={stats['success']} "
