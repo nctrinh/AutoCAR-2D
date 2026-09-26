@@ -33,6 +33,10 @@ environment:
   replan_lookahead_wp: 5
   replan_grid_resolution: 1.0
   replan_obstacle_radius: 0.5
+  enable_recovery: false          # bật ở evaluate/deploy cho map có ngõ cụt hẹp (vd map_5, map_6)
+  recovery_trigger_distance: 1.0
+  recovery_reverse_steps: 30       # trần an toàn (steps); thoát sớm hơn khi đã đủ trống hoặc bị chặn phía sau
+  recovery_escape_margin: 3.0
 
 model:
   learning_rate: 0.0003

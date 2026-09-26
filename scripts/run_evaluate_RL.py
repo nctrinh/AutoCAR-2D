@@ -69,6 +69,7 @@ def run_rl_episode(model, env: PathTrackingEnv, deterministic: bool = True, rend
         "reward": episode_reward,
         "mean_abs_cte": float(np.mean(cte_history)) if cte_history else 0.0,
         "replan_count": info.get("replan_count", 0),
+        "recovery_count": info.get("recovery_count", 0),
         "wall_time_s": time.time() - start_time,
     }
 
@@ -126,6 +127,7 @@ def run_classical_episode(controller, env: PathTrackingEnv, render: bool = False
         "reward": episode_reward,
         "mean_abs_cte": float(np.mean(cte_history)) if cte_history else 0.0,
         "replan_count": info.get("replan_count", 0),
+        "recovery_count": info.get("recovery_count", 0),
         "wall_time_s": time.time() - start_time,
     }
 
@@ -136,6 +138,7 @@ def summarize(name: str, episodes: list) -> dict:
     ctes = [e["mean_abs_cte"] for e in episodes]
     steps = [e["steps"] for e in episodes]
     replans = [e.get("replan_count", 0) for e in episodes]
+    recoveries = [e.get("recovery_count", 0) for e in episodes]
     return {
         "name": name,
         "success_rate": float(np.mean(successes)),
@@ -144,14 +147,17 @@ def summarize(name: str, episodes: list) -> dict:
         "mean_abs_cte": float(np.mean(ctes)),
         "mean_steps": float(np.mean(steps)),
         "mean_replans": float(np.mean(replans)),
+        "mean_recoveries": float(np.mean(recoveries)),
     }
 
 
-def print_comparison_table(summaries: list, fog_of_war: bool):
+def print_comparison_table(summaries: list, fog_of_war: bool, enable_recovery: bool = False):
     print("\n" + "=" * 92)
     header = f"{'Controller':<22}{'Success%':>10}{'MeanReward':>14}{'MeanCTE(m)':>14}{'MeanSteps':>14}"
     if fog_of_war:
         header += f"{'MeanReplans':>14}"
+    if enable_recovery:
+        header += f"{'MeanRecoveries':>16}"
     print(header)
     print("-" * 92)
     for s in summaries:
@@ -161,6 +167,8 @@ def print_comparison_table(summaries: list, fog_of_war: bool):
         )
         if fog_of_war:
             row += f"{s['mean_replans']:>14.1f}"
+        if enable_recovery:
+            row += f"{s['mean_recoveries']:>16.1f}"
         print(row)
     print("=" * 92)
 
@@ -171,7 +179,7 @@ def main():
     parser.add_argument("--algorithm", type=str, default="ppo", choices=["ppo", "sac"])
     parser.add_argument("--map", type=str, default="maps/yaml/map_1.yaml", help="Scenario map YAML")
     parser.add_argument("--config", type=str, default="config/RL_config.yaml")
-    parser.add_argument("--episodes", type=int, default=10)
+    parser.add_argument("--episodes", type=int, default=1)
     parser.add_argument("--compare", action="store_true", help="Also run PID and Pure Pursuit on the same path")
     parser.add_argument("--visualize", action="store_true", help="Render the first RL episode with pygame")
     parser.add_argument(
@@ -179,6 +187,13 @@ def main():
         action="store_true",
         help="Override config: agent only knows obstacles seen via LIDAR; "
         "path is re-planned online as it explores (see path_tracking_env.py)",
+    )
+    parser.add_argument(
+        "--recovery",
+        action="store_true",
+        help="Override config: enable the reverse/three-point-turn safety net "
+        "for dead ends too narrow to U-turn in with steering alone (see "
+        "PathTrackingEnv.enable_recovery). Off by default to match training.",
     )
     args = parser.parse_args()
 
@@ -189,10 +204,12 @@ def main():
     config = ConfigLoader(args.config)
     env_cfg = config.get("environment", {})
     fog_of_war = args.fog_of_war or env_cfg.get("fog_of_war", False)
+    enable_recovery = args.recovery or env_cfg.get("enable_recovery", False)
 
     print("=" * 70)
     print(f"EVALUATING: {args.model}  on map: {args.map}")
     print(f"Fog-of-war online replanning: {'ENABLED' if fog_of_war else 'disabled'}")
+    print(f"Reverse recovery safety net: {'ENABLED' if enable_recovery else 'disabled'}")
     print("=" * 70)
 
     map_env = load_map(args.map)
@@ -228,6 +245,10 @@ def main():
             replan_lookahead_wp=env_cfg.get("replan_lookahead_wp", 5),
             replan_grid_resolution=env_cfg.get("replan_grid_resolution", 1.0),
             replan_obstacle_radius=env_cfg.get("replan_obstacle_radius", 0.5),
+            enable_recovery=enable_recovery,
+            recovery_trigger_distance=env_cfg.get("recovery_trigger_distance", 1.0),
+            recovery_reverse_steps=env_cfg.get("recovery_reverse_steps", 30),
+            recovery_escape_margin=env_cfg.get("recovery_escape_margin", 3.0),
         )
 
     # --- RL ---
@@ -239,7 +260,7 @@ def main():
         rl_episodes.append(stats)
         print(
             f"  [RL] Ep {ep + 1}: reward={stats['reward']:.2f} success={stats['success']} "
-            f"steps={stats['steps']} replans={stats['replan_count']}"
+            f"steps={stats['steps']} replans={stats['replan_count']} recoveries={stats['recovery_count']}"
         )
     rl_env.close()
 
@@ -252,19 +273,19 @@ def main():
         app = AdaptivePurePursuitController(vehicle=Vehicle(vehicle_cfg))
 
         for name, controller in [("PID", pid), ("PurePursuit", pp), ("AdaptivePurePursuit", app)]:
-            env = make_fresh_env()
+            env = make_fresh_env(render_mode='human')
             episodes = []
             for ep in range(args.episodes):
-                stats = run_classical_episode(controller, env)
+                stats = run_classical_episode(controller, env, True)
                 episodes.append(stats)
                 print(
                     f"  [{name}] Ep {ep + 1}: reward={stats['reward']:.2f} success={stats['success']} "
-                    f"steps={stats['steps']} replans={stats['replan_count']}"
+                    f"steps={stats['steps']} replans={stats['replan_count']} recoveries={stats['recovery_count']}"
                 )
             env.close()
             summaries.append(summarize(name, episodes))
 
-    print_comparison_table(summaries, fog_of_war=fog_of_war)
+    print_comparison_table(summaries, fog_of_war=fog_of_war, enable_recovery=enable_recovery)
     return 0
 
 
