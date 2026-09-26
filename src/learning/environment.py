@@ -224,6 +224,7 @@ class PathTrackingEnv(gym.Env):
         self.recovery_reverse_steps = recovery_reverse_steps
         self._recovery_steps_remaining = 0
         self._recovery_steer = 0.0
+        self._pending_forced_replan = False
         self.recovery_count = 0
         half_angle = math.radians(recovery_front_half_angle_deg)
         self._front_cone_idx = np.array(
@@ -385,6 +386,7 @@ class PathTrackingEnv(gym.Env):
         self.recovery_count = 0
         self._recovery_steps_remaining = 0
         self._recovery_steer = 0.0
+        self._pending_forced_replan = False
 
         if self.fog_of_war and self._external_path is None:
             self.internal_map = self._create_empty_internal_map()
@@ -435,7 +437,9 @@ class PathTrackingEnv(gym.Env):
 
         if self.fog_of_war:
             self._update_internal_map_from_lidar(lidar)
-            self._maybe_replan()
+            force_replan = self._pending_forced_replan
+            self._pending_forced_replan = False
+            self._maybe_replan(force=force_replan)
 
         cte, heading_err, curvature, progress_dist, progress_ratio = (
             self._compute_path_metrics()
@@ -600,7 +604,7 @@ class PathTrackingEnv(gym.Env):
         cell = self._obstacle_cell(x, y)
         self._known_obstacle_cells.setdefault(cell, []).append((x, y))
 
-    def _maybe_replan(self) -> None:
+    def _maybe_replan(self, force: bool = False) -> None:
         """Kiểm tra xem vài waypoint phía trước có bị obstacle mới phát
         hiện chặn không; nếu có, replan bằng A* trên internal_map (map mà
         agent 'biết' tính tới thời điểm hiện tại) từ vị trí xe -> goal cuối.
@@ -612,19 +616,29 @@ class PathTrackingEnv(gym.Env):
         tăng dần khác. planner cũng được TÁI SỬ DỤNG (không tạo mới) khi
         thực sự replan, vì occupancy grid của nó đã được cập nhật
         incremental trong _update_internal_map_from_lidar().
+
+        force=True bỏ qua check "blocked" và luôn replan ngay -- dùng đúng
+        một lần khi recovery vừa lùi/đánh lái xong: "blocked" chỉ hỏi liệu
+        các waypoint TRÊN PATH CŨ có bị obstacle chặn không, nó không biết
+        gì về việc xe vừa bị recovery đẩy lệch khỏi path đó cả về vị trí lẫn
+        hướng. Nếu không force replan ở đây, tracker phải tự bám lại một
+        path được tính cho một pose xe đã không còn đúng nữa -- controller
+        không adaptive-speed (PID/PurePursuit thường, có thể cả RL) không
+        đủ khả năng hội tụ lại, heading_error/cte tăng dần đơn điệu cho tới
+        khi cte_fail_threshold cắt episode (truncated, không phải collision,
+        nhưng vẫn success=False) -- quan sát được thực nghiệm trên map_5.
         """
         if self.path is None or len(self.path.points) == 0 or self._replan_planner is None:
             return
 
-        end_idx = min(self.current_wp_idx + self.replan_lookahead_wp, len(self.path.points))
-        blocked = False
-        for wp in self.path.points[self.current_wp_idx:end_idx]:
-            if self._replan_planner.is_occupied_world(wp.x, wp.y):
-                blocked = True
-                break
-
-        if not blocked:
-            return
+        if not force:
+            end_idx = min(self.current_wp_idx + self.replan_lookahead_wp, len(self.path.points))
+            blocked = any(
+                self._replan_planner.is_occupied_world(wp.x, wp.y)
+                for wp in self.path.points[self.current_wp_idx:end_idx]
+            )
+            if not blocked:
+                return
 
         pos = self.vehicle.get_position()
         goal = self.map_env.goal
@@ -691,7 +705,15 @@ class PathTrackingEnv(gym.Env):
         three-point-turn opening move) instead of letting the tracker's
         own action run. Control is handed back afterwards -- the tracker
         re-approaches from a better angle, possibly retriggering recovery
-        again if the corridor needs more than one back-and-forth.
+        again if the corridor needs more than one back-and-forth. When
+        control IS handed back (fog_of_war only), a forced replan is
+        queued (see _maybe_replan's force=True) so the tracker resumes on
+        a path computed from where the vehicle actually ended up, not the
+        stale pre-recovery path -- see that method's docstring for why:
+        without it, a non-adaptive-speed tracker (plain PID/PurePursuit,
+        plausibly also an RL policy that wasn't trained with recovery
+        active) can't reconverge, and heading_error/cte grow monotonically
+        until cte_fail_threshold truncates the episode.
 
         The trigger distance is NOT a fixed constant: recovery_trigger_
         distance is a static clearance buffer, but the vehicle also needs
@@ -716,6 +738,8 @@ class PathTrackingEnv(gym.Env):
         """
         if self._recovery_steps_remaining > 0:
             self._recovery_steps_remaining -= 1
+            if self._recovery_steps_remaining == 0:
+                self._pending_forced_replan = True
             return np.array([-1.0, self._recovery_steer], dtype=np.float32)
 
         lidar = self._get_lidar_readings()
@@ -744,6 +768,8 @@ class PathTrackingEnv(gym.Env):
         # the corner it's trying to escape.
         self._recovery_steer = -1.0 if left_clearance >= right_clearance else 1.0
         self._recovery_steps_remaining = self.recovery_reverse_steps - 1
+        if self._recovery_steps_remaining == 0:
+            self._pending_forced_replan = True
         self.recovery_count += 1
         return np.array([-1.0, self._recovery_steer], dtype=np.float32)
 
